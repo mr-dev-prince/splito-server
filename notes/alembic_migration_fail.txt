@@ -1,0 +1,98 @@
+📚 FastAPI + SQLAlchemy + Alembic Migration Errors — Full Summary Notes
+1. ModuleNotFoundError: No module named 'app'
+Cause
+
+Alembic runs from the migrations/ folder.
+Your project root (app/) wasn’t on Python’s import path.
+
+Fix
+
+Add this to the top of migrations/env.py:
+
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+
+2. KeyError: 'formatters' in logging
+Cause
+
+alembic.ini had missing or corrupt logging config sections.
+
+Fix
+
+Ensure the default logging block exists or just disable logging in env.py:
+
+# if config.config_file_name:
+#     fileConfig(config.config_file_name)
+
+3. FAILED: No 'script_location' key found in configuration.
+Cause
+
+Your alembic.ini was missing:
+
+script_location = migrations
+
+Fix
+
+Add it back.
+
+4. sqlalchemy.exc.MissingGreenlet (Most painful one)
+Cause
+
+Async SQLAlchemy engine + Alembic sync operations = conflict.
+Alembic attempted sync DB access using asyncpg → greenlet failed.
+
+Fix
+
+Use the official async Alembic pattern:
+
+async with connectable.connect() as connection:
+    await connection.run_sync(do_migrations)
+
+
+This wraps sync operations inside an async-safe context.
+
+5. UndefinedTableError: relation "users" does not exist
+Cause
+
+You tried inserting/querying users BEFORE running migrations.
+The table literally didn’t exist yet.
+
+Fix
+
+Run:
+
+alembic revision --autogenerate -m "create users"
+alembic upgrade head
+
+6. alembic.runtime.environment.ObjectNotExecutableError
+
+(You didn’t hit it, but it's common when mixing async code)
+
+Cause
+
+Passing async SQL expressions directly to Alembic’s sync operations.
+
+Fix
+
+Always run DB logic via:
+
+connection.run_sync(fn)
+
+🧠 Final Golden Rules for Async Alembic
+
+Alembic is synchronous. Your DB engine is async.
+
+Use create_async_engine() in env.py (not in alembic.ini).
+
+Wrap all DB operations using:
+
+await connection.run_sync(...)
+
+
+Import every model inside env.py so autogenerate detects them.
+
+Migrations must be run BEFORE hitting routes that touch DB.
+
+🚀 One Ultra-Short Summary
+
+All errors came from Alembic expecting sync DB access while your engine was async. The fix is adjusting env.py to load the project path, fix alembic.ini, and wrap migrations with run_sync().

@@ -1,0 +1,2 @@
+# Show folder structure tree command - [ tree -L 4 app ]
+# Find and delete files - [ find . -type d -name "__pycache__" -exec rm -r {} + ]

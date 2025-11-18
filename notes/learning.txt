@@ -1,0 +1,62 @@
+-> Uvicorn - The actual server - engine running the fastapi server
+
+-> Folder Structure
+    - api -> routes, versioning, dependencies
+    - models -> SQLAlchemy ORM tables
+    - schemas -> Pydantic request/response bodies
+    - services -> business logic
+    - db -> database connection and migrations
+    - core -> app-level config, security, constants
+
+-> .env + pydantic-settings
+    - .env holds environment variables
+    - pydantic-settings gives you types, validated config loading - loading the values validated with types
+
+-> SQLAlchemy (async) - talking to PostGreSQL
+    - Python ORM
+
+-> asyncpg - lightning-fast postgreSQL Driver
+    - fully async
+    - faster than alternatives - psycopg2
+    - perfect for serverless db like neon
+
+-> models -> you db tables in python form
+
+-> Schemas - Not database models
+    - Schemas(pydantic models) define what is allowed to enter and exit your api
+    - If a user sends invalid data, fastAPI rejects it before it reaches the code
+    - Amazing for security and bug prevention
+    - Pydantic handles - Validation, Conversion, Documentation Generation
+
+    Modes : database
+    Schema : request/response
+
+    They're not interchangeable
+
+-> Service - The brain of the backend
+    - contains actual backend logic 
+
+-> Alembic - database migrations
+    - Databasese evolve. Alembic lets you apply changes without dropping tables
+    - No manual SQL needed for most changes
+    - It compares you models to the DB and creates migration scripts
+
+-> Neon - Severless PostGreSQL
+
+-> Swagger UI - Auto-Documentation
+    - Automatically generated 
+        - type hints
+        - Pydantic models
+        - Route Definitions
+
+
+-> requirements.txt - dependencies management
+
+    Commit requirements.txt for humans,
+    commit requirements.lock for reproducibility.
+
+    Exactly like JavaScript:
+
+        package.json (human)
+
+        package-lock.json (machine)

@@ -1,0 +1,47 @@
+# Python + FastAPI + Alembic + asyncpg
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+
+# Environment variables
+.env
+.env.*
+.env.local
+.secrets
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Logs & temp files
+*.log
+*.tmp
+
+# Alembic local artifacts
+alembic.ini.tmp
+
+# Byte-compiled / distribution / build
+build/
+dist/
+*.egg-info/
+pip-wheel-metadata/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Pytest / coverage
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Misc
+Thumbs.db
+
+*.ini

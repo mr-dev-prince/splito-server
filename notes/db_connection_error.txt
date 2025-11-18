@@ -1,0 +1,15 @@
+# 1. Error encountered while connecting to NEON DB
+
+    - You're using FastAPI (Async). Your application runs on an event loop.
+    - You're likely using SQLAlchemy's Async Engine.
+    - SQLAlchemy's core code is synchronous (blocking).
+    - To allow that synchronous code to run inside your async FastAPI application without blocking the whole event loop, SQLAlchemy uses greenlet to create a lightweight "green thread."
+    - This mechanism is called greenlet_spawn, and it lets the synchronous database logic pause and yield control back to the event loop when it waits for a result.
+    
+    In short: greenlet acts as a necessary bridge for SQLAlchemy to work efficiently and non-blockingly in a modern async environment like FastAPI. You need to install it.
+
+- Soution - used greenlet 
+
+- in db_url :
+    change sslmode to ssl 
+    remove &channel_binding=true
