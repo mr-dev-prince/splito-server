@@ -10,6 +10,8 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from app.db.session import Base
 import app.models.user  # import ALL models here
+import app.models.group
+import app.models.group_member
 
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 

@@ -1,17 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Cookie
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import async_session
+from app.db.session import get_db
 from app.schemas.user import UserCreate, UserOut, UserLogin
 from app.models.user import User
-from app.services.user_service import create_user, get_user_by_id
+from app.services.user_service import create_user, get_user_by_id, get_all_users
 from app.core.dependencies import authenticate_user, get_current_user
 from app.core.jwt_config import create_access_token, create_refresh_token, decode_token
 
 router = APIRouter()
 
-async def get_db():
-    async with async_session() as session:
-        yield session
+@router.get("/", response_model=list[UserOut])
+async def get_all(db:AsyncSession = Depends(get_db)):
+    users = await get_all_users(db)
+    return users
 
 @router.post("/register", response_model=UserOut)
 async def register_user(data:UserCreate, db:AsyncSession = Depends(get_db)):

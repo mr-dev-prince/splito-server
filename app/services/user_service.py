@@ -12,6 +12,10 @@ async def get_user_by_id(db: AsyncSession, id:int):
     result = await db.execute(select(User).where(User.id == id))
     return result.scalar_one_or_none()
 
+async def get_all_users(db: AsyncSession):
+    result = await db.execute(select(User))
+    return result.scalars().all()
+
 async def create_user(db: AsyncSession, data: UserCreate):
     existing = await get_user_by_email(db, data.email)
     if existing:
