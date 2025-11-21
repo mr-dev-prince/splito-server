@@ -1,0 +1,4 @@
+#TODO: Improve consistency across the codebase - [naming, utility usage]
+#TODO: Complete all todos
+#TODO: Add media - [ reciepts ] support across features
+#TODO: Add details - [ paid with UPI, for supplement etc ] feature across features

@@ -11,3 +11,5 @@ async def check_db():
         return {"db": True, "message":"Database is connected"}
     except Exception as e:
         return {"db": False, "error": str(e)}
+
+# 1 - System API

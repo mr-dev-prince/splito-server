@@ -17,4 +17,14 @@ async def del_expense(expense_id: int, db:AsyncSession = Depends(get_db), curren
 
 @router.patch("/{expense_id}")
 async def edit(data, expense_id: int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-    return await edit_expense(db, data, expense_id=expense_id, user_id=current_user.id);
+    return await edit_expense(db, data, expense_id=expense_id, user_id=current_user.id)
+
+# 3 - Expense APIs
+
+#TODO: All expenses in a group
+
+#TODO: Expenses paid by you
+
+#TODO: Expenses you owe
+
+#TODO: Expenses you are owed

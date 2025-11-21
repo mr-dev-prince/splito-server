@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Dict
 from fastapi import HTTPException
 from sqlalchemy import func
-from app.core.utils import qround
+from app.core.utils import qround, simplify_debts
 
 async def create_group(db: AsyncSession, name:str, creator_id:int):
     group = Group(name=name, created_by=creator_id)
@@ -36,13 +36,16 @@ async def delete_group(db: AsyncSession, group_id: int, creator_id: int):
 
     return {"status": "deleted"}
 
-async def add_member(db: AsyncSession, group_id: int, user_id: int):
+async def add_member(db: AsyncSession, group_id: int, user_id: int, creator_id: int):
     q = select(Group).where(Group.id == group_id)
     res = await db.execute(q)
     group = res.scalar_one_or_none()
 
     if not group:
         raise HTTPException(404, "Group doesn't exist")
+    
+    if group.created_by != creator_id:
+        raise HTTPException(403, "Only the group creator can add members")
     
     check_q = select(GroupMember).where(
         GroupMember.group_id == group_id,
@@ -160,7 +163,7 @@ async def edit_group(db: AsyncSession, group_id: int, user_id: int, data):
         raise HTTPException(404, "Group doesn't exist")
     
     if group.created_by != user_id:
-        raise HTTPException(403, "Only group adminc can edit group")
+        raise HTTPException(403, "Only group admin can edit group")
     
     if data.name:
         group.name = data.name
@@ -204,12 +207,36 @@ async def get_group_net_balances(db : AsyncSession, group_id: int) -> Dict[int, 
 
     return net
 
+async def get_group_settlement_plan(db: AsyncSession, group_id: int):
+    net = await get_group_net_balances(db, group_id=group_id)
+
+    net = {uid: (qround(amount)) if abs(amount) >= Decimal("0.005") else Decimal("0") for uid, amount in net.items()}
+
+    net = {uid: amt for uid, amt in net.items() if amt != 0}
+
+    transfers = simplify_debts(net)
+
+    if transfers:
+        user_ids = set()
+
+        for f, t, _ in transfers:
+            user_ids.add(f); user_ids.add(t)
+        q = select(User.id, User.name).where(User.id.in_(list(user_ids)))
+        res = await db.execute(q)
+        users = {row[0]: row[1] for row in res.all()}
+
+        plan = [
+            {
+                "from_id": f, "from_name": users.get(f),
+                "to_id": t, "to_name": users.get(t),
+                "amount": float(a)
+            }
+            for f, t, a in transfers
+        ]
+    else:
+        plan = []
+
+    return {"net": {uid: float(amount) for uid, amount in net.items()}, "settlements": plan}
 
 
-
-
-
-
-
-
-
+# 10 - Services

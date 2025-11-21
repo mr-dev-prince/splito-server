@@ -147,3 +147,5 @@ async def edit_expense(db: AsyncSession, data, expense_id: int, user_id: int):
     await db.commit()
     await db.refresh(expense)
     return expense
+
+# 3 - Expense

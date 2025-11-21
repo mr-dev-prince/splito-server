@@ -4,8 +4,9 @@ from app.db.session import get_db
 from app.schemas.user import UserCreate, UserOut, UserLogin
 from app.models.user import User
 from app.services.user_service import create_user, get_user_by_id, get_all_users, edit_user
-from app.core.dependencies import authenticate_user, get_current_user
+from app.core.dependencies import authenticate_user, get_current_user, check_group_membership
 from app.core.jwt_config import create_access_token, create_refresh_token, decode_token
+from app.core.utils import get_user_total_balance
 
 router = APIRouter()
 
@@ -118,3 +119,13 @@ async def logout_user(response: Response, db: AsyncSession = Depends(get_db), cu
 @router.patch("/edit/{user_id}")
 async def edit(data, db:AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
     return await edit_user(db, data, user_id=current_user.id)
+
+@router.get("/users/{user_id}/balance")
+async def user_balance(user_id: int, db: AsyncSession = Depends(get_db)):
+    bal = await get_user_total_balance(db, user_id=user_id)
+    return {"user_id": user_id, "amount": float(bal)}
+
+
+# 8 - user apis
+
+#TODO: fetch global balances 
