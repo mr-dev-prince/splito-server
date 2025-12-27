@@ -1,15 +1,20 @@
-from fastapi import APIRouter
-from app.db.session import engine
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.services.system_services import check_db_service, system_metrics, system_health
+from app.db.session import get_db
 
 router = APIRouter()
 
 @router.get("/health/db")
 async def check_db():
-    try:
-        async with engine.connect() as conn:
-            await conn.exec_driver_sql("SELECT 1")
-        return {"db": True, "message":"Database is connected"}
-    except Exception as e:
-        return {"db": False, "error": str(e)}
+    return await check_db_service()
 
-# 1 - System API
+@router.get("/metrics")
+async def metrics(
+    db: AsyncSession = Depends(get_db)
+):
+    return await system_metrics(db)
+
+@router.get("/health")
+async def health():
+    return await system_health()

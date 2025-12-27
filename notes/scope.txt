@@ -64,29 +64,6 @@
 
     Mention this once in an interview → instant credibility.
 
-7. System-Level APIs (Production Awareness)
-
-    You already have:
-
-    GET /system/health/db
-
-
-    Add:
-
-    GET /api/v1/system/health
-    GET /api/v1/system/metrics
-
-
-    Metrics can expose:
-
-    Total users
-
-    Total groups
-
-    Total expenses
-
-    Simple counts. Big signal.
-
 8. Notifications (Optional, Resume Gold)
 
     Even fake it.

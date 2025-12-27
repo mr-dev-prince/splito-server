@@ -3,8 +3,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.schemas.user import UserCreate, UserOut, UserLogin
 from app.models.user import User
-from app.services.user_service import create_user, get_user_by_id, get_all_users, edit_user
-from app.core.dependencies import authenticate_user, get_current_user, check_group_membership
+from app.services.user_service import create_user, edit_user, login_user_service
+from app.services.user_queries import get_all_users, get_user_by_id
+from app.core.dependencies import get_current_user
 from app.core.jwt_config import create_access_token, create_refresh_token, decode_token
 from app.core.utils import get_user_total_balance
 
@@ -24,25 +25,22 @@ async def register_user(data:UserCreate, db:AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail=str(e))
     
 @router.post("/login", response_model=UserOut)
-async def login_user(data:UserLogin, response : Response, db:AsyncSession = Depends(get_db)):
-    user = await authenticate_user(db, data.email, data.password)
-
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-    
-    access = create_access_token({"sub": str(user.id)})
-    refresh = create_refresh_token({"sub": str(user.id)})
-
-    print(access)
-
-    user.refresh_token = refresh
-    await db.commit()
+async def login_user(
+    data: UserLogin,
+    response: Response,
+    db: AsyncSession = Depends(get_db)
+):
+    user, access, refresh = await login_user_service(
+        db,
+        email=data.email,
+        password=data.password
+    )
 
     response.set_cookie(
         key="refresh_token",
         value=refresh,
         httponly=True,
-        secure=False,
+        secure=False,     
         samesite="none"
     )
 
@@ -50,7 +48,7 @@ async def login_user(data:UserLogin, response : Response, db:AsyncSession = Depe
         key="access_token",
         value=access,
         httponly=True,
-        secure=False,
+        secure=False,    
         samesite="none"
     )
 
@@ -124,8 +122,3 @@ async def edit(data, db:AsyncSession = Depends(get_db), current_user = Depends(g
 async def user_balance(user_id: int, db: AsyncSession = Depends(get_db)):
     bal = await get_user_total_balance(db, user_id=user_id)
     return {"user_id": user_id, "amount": float(bal)}
-
-
-# 8 - user apis
-
-#TODO: fetch global balances 

@@ -68,7 +68,6 @@ async def get_user_total_balance(db: AsyncSession, user_id: int):
     return qround(paid - owed)
 
 async def get_overall_net_map(db: AsyncSession) -> Dict[int, Decimal]:
-    # Total paid per user
     paid_q = (
         select(
             Expense.paid_by,
@@ -83,7 +82,6 @@ async def get_overall_net_map(db: AsyncSession) -> Dict[int, Decimal]:
         for uid, amt in paid_res.all()
     }
 
-    # Total owed per user
     owed_q = (
         select(
             ExpenseSplit.user_id,

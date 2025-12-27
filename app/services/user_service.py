@@ -3,19 +3,25 @@ from sqlalchemy.future import select
 from app.models.user import User
 from app.schemas.user import UserCreate
 from app.core.security import hash_password
+from app.core.jwt_config import create_access_token, create_refresh_token
+from app.services.user_queries import get_user_by_email, get_user_by_id
+from app.core.security import verify_password
 from fastapi import HTTPException
+from sqlalchemy.sql import func
 
-async def get_user_by_email(db: AsyncSession, email:str):
-    result = await db.execute(select(User).where(User.email == email))
-    return result.scalar_one_or_none()
+async def authenticate_user(
+    db: AsyncSession,
+    email: str,
+    password: str
+):
+    user = await get_user_by_email(db, email)
+    if not user:
+        return None
 
-async def get_user_by_id(db: AsyncSession, id:int):
-    result = await db.execute(select(User).where(User.id == id))
-    return result.scalar_one_or_none()
+    if not verify_password(password, user.password_hash):
+        return None
 
-async def get_all_users(db: AsyncSession):
-    result = await db.execute(select(User))
-    return result.scalars().all()
+    return user
 
 async def create_user(db: AsyncSession, data: UserCreate):
     existing = await get_user_by_email(db, data.email)
@@ -52,4 +58,23 @@ async def edit_user(db : AsyncSession, data ,user_id: int):
 
     return user
 
-# 5 - user services
+async def login_user_service(
+    db: AsyncSession,
+    email: str,
+    password: str
+):
+    user = await authenticate_user(db, email, password)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    access_token = create_access_token({"sub": str(user.id)})
+    refresh_token = create_refresh_token({"sub": str(user.id)})
+
+    user.refresh_token = refresh_token
+    user.last_login_at = func.now()
+
+    await db.commit()
+    await db.refresh(user)
+
+    return user, access_token, refresh_token

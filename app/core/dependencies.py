@@ -1,16 +1,11 @@
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.db.session import async_session
 from app.core.jwt_config import decode_token, get_token_from_cookie
-from app.services.user_service import get_user_by_id, get_user_by_email
-from app.core.security import verify_password
+from app.services.user_queries import get_user_by_id
+from app.db.session import get_db
 from sqlalchemy import select
 from app.models.group import Group
 from app.models.group_member import GroupMember
-
-async def get_db():
-    async with async_session() as session:
-        yield session
 
 async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)):
     try:
@@ -33,16 +28,6 @@ async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=401, detail="Could not validate credentials")
     
-async def authenticate_user(db:AsyncSession, email:str, password:str):
-    user = await get_user_by_email(db, email)
-    if not user:
-        return None
-    
-    if not verify_password(password, user.password_hash):
-        return None
-    
-    return user
-
 async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
     q_group = select(Group).where(Group.id == group_id)
     res_group = await db.execute(q_group)
