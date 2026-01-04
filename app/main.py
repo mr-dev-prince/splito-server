@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routes.system import router as system_router
 from app.api.v1.routes.user import router as user_router
 from app.api.v1.routes.group import router as group_router
@@ -6,8 +7,15 @@ from app.api.v1.routes.expense import router as expense_router
 from app.api.v1.routes.balances import router as balance_router
 from app.api.v1.routes.webhook import router as webhook_router
 
-
 app = FastAPI(title="Splitwise Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def root():
