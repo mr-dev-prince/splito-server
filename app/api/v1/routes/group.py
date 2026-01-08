@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends
+from app.schemas.user import AuthUser
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
 from app.services.group_services import create_group, add_member, list_group_for_user, list_group_members, delete_group, remove_member, exit_group, edit_group, get_group_settlement_plan, list_group_expenses
-from app.schemas.group import GroupCreate, GroupMemberOut, GroupOut
+from app.schemas.group import GroupCreate, GroupMemberOut, GroupOut, GroupMemberIn
 from app.schemas.balances import GroupBalanceOut
 from app.core.dependencies import get_current_user, check_group_membership
 from app.services.settlement_service import compute_group_settlements, add_settlement, get_settlement_history,undo_settlement
@@ -10,17 +11,18 @@ from app.schemas.settlements import Settlement, SettlementHistoryCreate, Settlem
 
 router = APIRouter()
 
+# working fine
 @router.post("/", response_model=GroupOut, description="create new group")
 async def create_new_group(
     data:GroupCreate,
     db: AsyncSession = Depends(get_db),
-    user = Depends(get_current_user)
+    user : AuthUser = Depends(get_current_user)
 ):
     group = await create_group(db, data.name, user.id)
     return group
 
-@router.get("/my-groups", response_model=list[GroupOut], description="get user groups")
-async def my_groups(db: AsyncSession = Depends(get_db), user = Depends(get_current_user)):
+@router.get("/", response_model=list[GroupOut], description="get user groups")
+async def get_groups(db: AsyncSession = Depends(get_db), user : AuthUser = Depends(get_current_user)):
     return await list_group_for_user(db, user.id)
 
 @router.patch("/{group_id}")
@@ -32,14 +34,15 @@ async def edit(group_id: int, data, db: AsyncSession = Depends(get_db), current_
 async def del_group(group_id: int, db: AsyncSession = Depends(get_db), current_user: int = Depends(get_current_user)):
     return await delete_group(db, group_id=group_id, creator_id=current_user.id)
 
-@router.post("/{group_id}/add/{user_id}", response_model=GroupMemberOut)
-async def add_user_to_group(
-    group_id: int, 
-    user_id: int, 
-    db: AsyncSession = Depends(get_db), 
-    current_user = Depends(get_current_user)
+@router.post("/{group_id}/members", response_model=GroupMemberOut)
+async def add_group_member(
+    group_id: int,
+    data: GroupMemberIn,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    return await add_member(db, group_id, user_id, current_user.id)
+    return await add_member(db, group_id, data, current_user.id)
+
 
 @router.delete("/{group_id}/remove/{user_id}")
 async def rem_mem(group_id: int, user_id : int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
@@ -102,4 +105,4 @@ async def fetch_expenses(
 ):
     return await list_group_expenses(db, user.id, group_id)
 
-# 14 - Group APIs
+# 13 - Group APIs

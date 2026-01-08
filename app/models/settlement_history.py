@@ -5,7 +5,7 @@ from app.db.session import Base
 class SettlementHistory(Base):
     __tablename__ = "settlement_history"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
     from_user = Column(Integer, ForeignKey("users.id"), nullable=False)
     to_user = Column(Integer, ForeignKey("users.id"), nullable=False)

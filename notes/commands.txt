@@ -5,5 +5,9 @@
 
 -> activate venv -> [ source venv/bin/activate ]
 -> run server    -> [ uvicorn app.main:app ]
+
 -> migrate db    -> [ alembic revision --autogenerate -m "create users table" ]
--> apply migration -> [ alembic upgrage head ]
+-> apply migration -> [ alembic upgrade head ]
+
+-> install all packages -> [ pip install -r requirements.lock ]
+-> store in requirements.txt -> [ pip freeze > requirements.txt ]

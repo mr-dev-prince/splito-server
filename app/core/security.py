@@ -8,7 +8,14 @@ CLERK_AUDIENCE = "your-clerk-frontend-api"
 
 jwks = httpx.get(CLERK_JWKS_URL).json()
 
-def verify_clerk_token(token: str):
+def get_bearer_token(request: Request) -> str:
+    auth = request.headers.get("Authorization")
+    if not auth or not auth.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    return auth.split(" ")[1]
+ 
+def verify_clerk_token(request: Request):
+    token = get_bearer_token(request)
     unverified_header = jwt.get_unverified_header(token)
     key = next(
         k for k in jwks["keys"]
@@ -24,9 +31,3 @@ def verify_clerk_token(token: str):
     )
 
     return payload
-
-def get_bearer_token(request: Request) -> str:
-    auth = request.headers.get("Authorization")
-    if not auth or not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
-    return auth.split(" ")[1]

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routes.system import router as system_router
 from app.api.v1.routes.user import router as user_router
@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
+@app.get("/") 
 async def root():
     return {"message": "Splitwise Backend is live"}
 

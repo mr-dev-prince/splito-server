@@ -5,22 +5,38 @@ from app.models.group_member import GroupMember
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.models.user import User
+from app.schemas.group import GroupMemberIn
 from decimal import Decimal
 from typing import Dict
 from fastapi import HTTPException
 from sqlalchemy import func
 from app.core.utils import qround, simplify_debts
 
-async def create_group(db: AsyncSession, name:str, creator_id:int):
-    group = Group(name=name, created_by=creator_id)
+async def create_group(db: AsyncSession, name: str, creator_id: int):
+    group = Group(
+        name=name,
+        created_by=creator_id,
+    )
     db.add(group)
+
     await db.flush()
 
-    member = GroupMember(group_id=group.id, user_id=creator_id)
+    user = await db.get(User, creator_id)
+    if not user:
+        raise ValueError("Creator user not found")
+
+    member = GroupMember(
+        group_id=group.id,
+        user_id=creator_id,
+        name=user.name,
+        email=user.email,
+        is_admin=True,
+    )
     db.add(member)
 
     await db.commit()
-    await db.refresh(group)
+    await db.refresh(group, attribute_names=["members"])
+
     return group
 
 async def delete_group(db: AsyncSession, group_id: int, creator_id: int):
@@ -36,33 +52,56 @@ async def delete_group(db: AsyncSession, group_id: int, creator_id: int):
 
     return {"status": "deleted"}
 
-async def add_member(db: AsyncSession, group_id: int, user_id: int, creator_id: int):
-    q = select(Group).where(Group.id == group_id)
-    res = await db.execute(q)
-    group = res.scalar_one_or_none()
+async def add_member(
+    db: AsyncSession,
+    group_id: int,
+    data: GroupMemberIn,
+    creator_id: int,
+):
+    group = await db.scalar(
+        select(Group).where(Group.id == group_id)
+    )
 
     if not group:
         raise HTTPException(404, "Group doesn't exist")
-    
+
     if group.created_by != creator_id:
-        raise HTTPException(403, "Only the group creator can add members")
-    
-    check_q = select(GroupMember).where(
-        GroupMember.group_id == group_id,
-        GroupMember.user_id == user_id
+        raise HTTPException(403, "Only group admin can add members")
+
+    # Prevent duplicate invite
+    exists = await db.scalar(
+        select(GroupMember).where(
+            GroupMember.group_id == group_id,
+            GroupMember.email == data.email
+            if data.email else
+            GroupMember.phone == data.phone
+        )
     )
 
-    existing = await db.execute(check_q)
-    member = existing.scalar_one_or_none()
+    if exists:
+        raise HTTPException(400, "Member already exists in group")
 
-    if member:
-        raise HTTPException(400, "User already exist in this group")
+    # Try to link user by email
+    user_id = None
+    if data.email:
+        user = await db.scalar(
+            select(User).where(User.email == data.email)
+        )
+        if user:
+            user_id = user.id
 
-    new_member = GroupMember(group_id=group_id, user_id=user_id)
-    db.add(new_member)
+    member = GroupMember(
+        group_id=group_id,
+        user_id=user_id,
+        email=data.email,
+        phone=data.phone,
+    )
+
+    db.add(member)
     await db.commit()
-    await db.refresh(new_member)
-    return new_member
+    await db.refresh(member)
+
+    return member
 
 async def remove_member(db: AsyncSession, group_id: int, user_id: int, creator_id: int):
     #TODO: if balance due, restrict removal of member

@@ -7,7 +7,7 @@ class User(Base):
     id = Column(Integer, primary_key=True)
     clerk_user_id = Column(String, unique=True, nullable=False)
 
-    email = Column(String, index=True, nullable=False)
+    email = Column(String, nullable=False)
     name = Column(String, default="Splito User")
     avatar_url = Column(String, nullable=True)
 

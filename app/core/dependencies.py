@@ -1,4 +1,6 @@
 from fastapi import Depends, HTTPException, Request
+from app.schemas.user import AuthUser
+from app.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.user_queries import get_user_by_id
 from app.core.security import get_bearer_token, verify_clerk_token
@@ -7,26 +9,25 @@ from sqlalchemy import select
 from app.models.group import Group
 from app.models.group_member import GroupMember
 
-async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)):
-    try:
-        token = get_bearer_token(request)
-        payload = verify_clerk_token(token)
-        print(payload)
-        user_id = payload.get("sub")
-        
-        if user_id is None:
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-        
-        user = await get_user_by_id(db, int(user_id))
+async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)) -> AuthUser:
+    payload = verify_clerk_token(request)
+    clerk_user_id = payload["sub"]
 
-        if user is None:
-            raise HTTPException(status_code=401, detail="User not found")
-        
-        return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
+    result = await db.execute(
+        select(User).where(User.clerk_user_id == clerk_user_id)
+    )
+
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return AuthUser(
+        id=user.id,
+        clerk_user_id=user.clerk_user_id,
+        email=user.email,
+        is_active=user.is_active
+    )
     
 async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
     q_group = select(Group).where(Group.id == group_id)

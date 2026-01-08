@@ -1,5 +1,4 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, model_validator
 
 class GroupCreate(BaseModel):
     name: str
@@ -13,8 +12,22 @@ class GroupOut(BaseModel):
         from_attributes = True
         
 class GroupMemberOut(BaseModel):
-    user_id: int
+    name:str
+    email: int
     group_id: int
 
     class Config:
         from_attributes = True
+
+class GroupMemberIn(BaseModel):
+    email: str | None = None
+    phone: str | None = None
+    name: str | None = None
+
+    @model_validator(mode="after")
+    def validate_input(self):
+        if not self.name:
+            return ValueError("Name is required")
+        if not self.email and not self.phone:
+            raise ValueError("Email or phone is required")
+        return self
