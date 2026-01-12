@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.user_queries import get_user_by_id
 from app.core.security import get_bearer_token, verify_clerk_token
 from app.db.session import get_db
-from sqlalchemy import select
+from sqlalchemy import select, exists
 from app.models.group import Group
 from app.models.group_member import GroupMember
 
@@ -49,3 +49,19 @@ async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
         raise HTTPException(403, "You are not a member of this group")
 
     return member
+
+async def ensure_user_in_group(
+    db: AsyncSession,
+    user_id: int,
+    group_id: int
+):
+    q = select(
+        exists().where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == user_id
+        )
+    )
+    result = await db.execute(q)
+
+    if not result.scalar():
+        raise HTTPException(status_code=403, detail="Unauthorized access")

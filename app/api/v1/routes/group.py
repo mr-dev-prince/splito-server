@@ -21,6 +21,7 @@ async def create_new_group(
     group = await create_group(db, data.name, user.id)
     return group
 
+# working fine
 @router.get("/", response_model=list[GroupOut], description="get user groups")
 async def get_groups(db: AsyncSession = Depends(get_db), user : AuthUser = Depends(get_current_user)):
     return await list_group_for_user(db, user.id)
@@ -34,7 +35,8 @@ async def edit(group_id: int, data, db: AsyncSession = Depends(get_db), current_
 async def del_group(group_id: int, db: AsyncSession = Depends(get_db), current_user: int = Depends(get_current_user)):
     return await delete_group(db, group_id=group_id, creator_id=current_user.id)
 
-@router.post("/{group_id}/members", response_model=GroupMemberOut)
+# working fine
+@router.post("/{group_id}/members") 
 async def add_group_member(
     group_id: int,
     data: GroupMemberIn,
@@ -42,7 +44,6 @@ async def add_group_member(
     current_user: AuthUser = Depends(get_current_user),
 ):
     return await add_member(db, group_id, data, current_user.id)
-
 
 @router.delete("/{group_id}/remove/{user_id}")
 async def rem_mem(group_id: int, user_id : int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
@@ -54,7 +55,8 @@ async def exit(group_id: int, db:AsyncSession = Depends(get_db), current_user = 
     await check_group_membership(db, group_id, current_user.id)
     return await exit_group(db, group_id=group_id, user_id=current_user.id)
 
-@router.get("/{group_id}/group-members")
+
+@router.get("/{group_id}/members")
 async def group_members(group_id: int, db: AsyncSession = Depends(get_db), current_user=Depends(get_current_user)):
     await check_group_membership(db, group_id, current_user.id)
     return await list_group_members(db, current_user.id, group_id=group_id)

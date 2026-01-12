@@ -11,6 +11,7 @@ from typing import Dict
 from fastapi import HTTPException
 from sqlalchemy import func
 from app.core.utils import qround, simplify_debts
+from app.core.dependencies import ensure_user_in_group
 
 async def create_group(db: AsyncSession, name: str, creator_id: int):
     group = Group(
@@ -92,6 +93,7 @@ async def add_member(
 
     member = GroupMember(
         group_id=group_id,
+        name=data.name,
         user_id=user_id,
         email=data.email,
         phone=data.phone,
@@ -170,28 +172,28 @@ async def list_group_for_user(db: AsyncSession, user_id: int):
     return result.scalars().all()
 
 async def list_group_members(db:AsyncSession, user_id:int, group_id: int):
-    check_q = (
-        select(GroupMember)
-        .where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
-        )
-    )
+    await ensure_user_in_group(db, user_id, group_id)
 
-    check = await db.execute(check_q)
-
-    if not check.scalar():
-        raise HTTPException(status_code=403, detail="Unauthorized access")
-    
-    members__q = (
-        select(User)
-        .join(GroupMember, User.id == GroupMember.user_id)
+    q = (
+        select(GroupMember, User)
+        .outerjoin(User, User.id == GroupMember.user_id)
         .where(GroupMember.group_id == group_id)
     )
 
-    result = await db.execute(members__q)
-    users = result.scalars().all()
-    return users
+    result = await db.execute(q)
+
+    members = []
+    for gm, user in result.all():
+        members.append({
+            "id": gm.id,
+            "name": gm.name,
+            "email": gm.email or (user.email if user else None),
+            "phone": gm.phone,
+            "is_admin": gm.is_admin,
+            "user_id": gm.user_id,
+        })
+
+    return members
 
 async def edit_group(db: AsyncSession, group_id: int, user_id: int, data):
     q = select(Group).where(Group.id == group_id)

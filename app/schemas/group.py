@@ -13,7 +13,9 @@ class GroupOut(BaseModel):
         
 class GroupMemberOut(BaseModel):
     name:str
-    email: int
+    email: str | None = None
+    phone: str | None = None
+    user_id: int | None = None
     group_id: int
 
     class Config:
