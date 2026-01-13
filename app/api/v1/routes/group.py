@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from app.schemas.user import AuthUser
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.services.group_services import create_group, add_member, list_group_for_user, list_group_members, delete_group, remove_member, exit_group, edit_group, get_group_settlement_plan, list_group_expenses
-from app.schemas.group import GroupCreate, GroupMemberOut, GroupOut, GroupMemberIn
+from app.services.group_services import create_group, add_member, list_group_for_user, list_group_members, delete_group, remove_member, exit_group, edit_group, get_group_settlement_plan, list_group_expenses, get_group_by_id
+from app.schemas.group import GroupCreate, GroupDetailOut, GroupMemberOut, GroupOut, GroupMemberIn
 from app.schemas.balances import GroupBalanceOut
 from app.core.dependencies import get_current_user, check_group_membership
 from app.services.settlement_service import compute_group_settlements, add_settlement, get_settlement_history,undo_settlement
@@ -26,6 +26,14 @@ async def create_new_group(
 async def get_groups(db: AsyncSession = Depends(get_db), user : AuthUser = Depends(get_current_user)):
     return await list_group_for_user(db, user.id)
 
+@router.get("/{group_id}", response_model=GroupDetailOut, description="get group by id")
+async def get_group_data(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return await get_group_by_id(db, group_id, current_user.id)
+    
 @router.patch("/{group_id}")
 async def edit(group_id: int, data, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
     await check_group_membership(db, group_id, current_user.id)

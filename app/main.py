@@ -24,6 +24,6 @@ async def root():
 app.include_router(system_router, prefix="/api/v1/system")
 app.include_router(user_router, prefix="/api/v1/users") 
 app.include_router(group_router, prefix="/api/v1/groups")
-app.include_router(expense_router, prefix="/api/v1/expense")
+app.include_router(expense_router, prefix="/api/v1/expenses")
 app.include_router(balance_router, prefix="/api/v1/balances")
 app.include_router(webhook_router, prefix="/api/v1/webhooks")

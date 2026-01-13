@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, model_validator
 
 class GroupCreate(BaseModel):
@@ -7,6 +8,18 @@ class GroupOut(BaseModel):
     id: int
     name: str
     created_by: int
+
+    class Config:
+        from_attributes = True
+    
+class GroupDetailOut(BaseModel):
+    id: int
+    name: str
+    created_by: int
+    created_at: datetime
+    total_spent: float
+    my_balance: float
+    member_count: int
 
     class Config:
         from_attributes = True

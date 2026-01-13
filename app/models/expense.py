@@ -8,11 +8,11 @@ class Expense(Base):
 
     id = Column(Integer, primary_key=True)
     group_id = Column(Integer, ForeignKey("groups.id"), nullable=False)
-    paid_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    paid_by = Column(Integer, ForeignKey("group_members.id"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
-    description = Column(String, nullable=True)
+    title = Column(String, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    strategy = Column(String, nullable=False, server_default="equal")
     is_deleted = Column(Boolean, nullable=False, server_default="false")
-
 
     splits = relationship("ExpenseSplit", back_populates="expense", cascade="all, delete")

@@ -7,7 +7,7 @@ class ExpenseSplit(Base):
 
     id = Column(Integer, primary_key=True)
     expense_id = Column(Integer, ForeignKey("expenses.id"), nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    member_id = Column(Integer, ForeignKey("group_members.id"), nullable=False)
     amount = Column(Numeric(10, 2), nullable=False)
 
     expense = relationship("Expense", back_populates="splits")

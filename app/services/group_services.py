@@ -9,7 +9,7 @@ from app.schemas.group import GroupMemberIn
 from decimal import Decimal
 from typing import Dict
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, case
 from app.core.utils import qround, simplify_debts
 from app.core.dependencies import ensure_user_in_group
 
@@ -52,6 +52,84 @@ async def delete_group(db: AsyncSession, group_id: int, creator_id: int):
     await db.commit()
 
     return {"status": "deleted"}
+
+async def get_group_by_id(
+    db: AsyncSession,
+    group_id: int,
+    user_id: int,
+):
+    await ensure_user_in_group(db, user_id, group_id)
+
+    res = await db.execute(
+        select(GroupMember.id).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == user_id,
+        )
+    )
+    current_member_id = res.scalar_one_or_none()
+
+    if not current_member_id:
+        raise HTTPException(400, "User is not a member of the group")
+
+    # Total spent in group
+    total_spent_q = (
+        select(func.coalesce(func.sum(Expense.amount), 0))
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False,
+        )
+    )
+    total_spent = (await db.execute(total_spent_q)).scalar()
+
+    balance_q = (
+        select(
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            Expense.paid_by == current_member_id,
+                            Expense.amount - ExpenseSplit.amount,
+                        ),
+                        else_=-ExpenseSplit.amount,
+                    )
+                ),
+                0,
+            )
+        )
+        .select_from(ExpenseSplit)
+        .join(Expense, Expense.id == ExpenseSplit.expense_id)
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False,
+            ExpenseSplit.member_id == current_member_id,
+        )
+    )
+
+    my_balance = (await db.execute(balance_q)).scalar()
+
+    member_count = (
+        await db.execute(
+            select(func.count(GroupMember.id))
+            .where(GroupMember.group_id == group_id)
+        )
+    ).scalar()
+
+    group = (
+        await db.execute(select(Group).where(Group.id == group_id))
+    ).scalar_one_or_none()
+
+    if not group:
+        raise HTTPException(404, "Group doesn't exist")
+
+    return {
+        "id": group.id,
+        "name": group.name,
+        "created_by": group.created_by,
+        "created_at": group.created_at,
+        "total_spent": float(total_spent),
+        "my_balance": float(my_balance),
+        "member_count": member_count,
+    }
 
 async def add_member(
     db: AsyncSession,

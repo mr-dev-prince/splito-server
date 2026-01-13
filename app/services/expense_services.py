@@ -1,69 +1,100 @@
+from app.core.dependencies import ensure_user_in_group
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
+from sqlalchemy.orm import aliased
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.models.group_member import GroupMember
+from app.schemas.expense import ExpenseCreate
 from app.models.user import User
 from app.core.utils import qround
 from decimal import Decimal
 from fastapi import HTTPException
 
-async def create_expense(db: AsyncSession, data, paid_by: int):
-    # 1. Check if payer is member of group
-    q = select(GroupMember).where(
-        GroupMember.group_id == data.group_id,
+# TODO : store upi_id with user data and generate qr code for payments
+
+# working fine
+async def create_expense(db: AsyncSession, data: ExpenseCreate, paid_by: int, group_id: int):
+    await ensure_user_in_group(db, paid_by, group_id)
+
+    payer_member_id = select(GroupMember.id).where(
+        GroupMember.group_id == group_id,
         GroupMember.user_id == paid_by
     )
-    result = await db.execute(q)
+
+    res = await db.execute(payer_member_id)
+
+    payer_member_id = res.scalar_one_or_none()
+
+    if not payer_member_id:
+        raise HTTPException(400, "Payer is not a member of the group")
     
-    if not result.scalar_one_or_none():
-        raise HTTPException(403, "Payer is not a member of the group")
+    # -----------------------------------
+    # 2. Extract & validate split users
+    # -----------------------------------
+    member_ids = [s.member_id for s in data.splits]
 
-    # Extract user_ids from split input
-    user_ids = [s.user_id for s in data.splits]
-
-    # 2. Check duplicates
-    if len(user_ids) != len(set(user_ids)):
+    if len(member_ids) != len(set(member_ids)):
         raise HTTPException(400, "Duplicate users found in splits")
 
-    # 3. Validate positive amount
-    if any(s.amount <= 0 for s in data.splits):
+    # -----------------------------------
+    # 3. Validate amounts
+    # -----------------------------------
+    if any(Decimal(s.amount) <= 0 for s in data.splits):
         raise HTTPException(400, "Split amounts must be positive")
 
-    # 4. Validate sum of splits == total
-    total = sum(s.amount for s in data.splits)
-    if total != data.amount:
-        raise HTTPException(400, "Sum of split amounts must equal total amount")
+    total_split = sum(Decimal(s.amount) for s in data.splits)
+    if total_split != Decimal(data.amount):
+        raise HTTPException(
+            400,
+            f"Split total ({total_split}) must equal expense amount ({data.amount})"
+        )
 
-    # 5. Validate all users in split are members of the group
-    q2 = select(GroupMember).where(
-        GroupMember.group_id == data.group_id,
-        GroupMember.user_id.in_(user_ids)
+    # -----------------------------------
+    # 4. Validate ALL split users are group members
+    # -----------------------------------
+    members_q = select(GroupMember.id).where(
+        GroupMember.group_id == group_id,
+        GroupMember.id.in_(member_ids)
     )
-    result2 = await db.execute(q2)
-    members = result2.scalars().all()
 
-    if len(members) != len(user_ids):
-        raise HTTPException(400, "Some users in split are not group members")
+    members_res = await db.execute(members_q)
 
-    # 6. Create expense
+    valid_user_ids = {row[0] for row in members_res.all()}
+
+    if set(member_ids) != valid_user_ids:
+        raise HTTPException(
+            400,
+            "One or more users in splits are not members of the group"
+        )
+
+    # -----------------------------------
+    # 5. Create expense
+    # -----------------------------------
     expense = Expense(
-        group_id=data.group_id,
-        paid_by=paid_by,
+        group_id=group_id,
+        paid_by=payer_member_id,
         amount=data.amount,
-        description=data.description
+        title=data.title,
+        strategy=data.strategy
     )
-    db.add(expense)
-    await db.flush()  # gives expense.id
 
-    # 7. Create split records
-    for s in data.splits:
-        split = ExpenseSplit(
+    db.add(expense)
+    await db.flush()  # generates expense.id
+
+    # -----------------------------------
+    # 6. Create splits
+    # -----------------------------------
+    splits = [
+        ExpenseSplit(
             expense_id=expense.id,
-            user_id=s.user_id,
+            member_id=s.member_id,
             amount=s.amount
         )
-        db.add(split)
+        for s in data.splits
+    ]
+
+    db.add_all(splits)
 
     await db.commit()
     await db.refresh(expense)
@@ -356,3 +387,79 @@ async def get_expense_by_id(
         },
         "splits": splits
     }
+
+async def get_expenses_by_group(
+    db: AsyncSession,
+    group_id: int,
+    user_id: int,
+):
+    await ensure_user_in_group(db, user_id, group_id)
+
+    # get current member id
+    res = await db.execute(
+        select(GroupMember.id).where(
+            GroupMember.group_id == group_id,
+            GroupMember.user_id == user_id
+        )
+    )
+    current_member_id = res.scalar_one_or_none()
+
+    if not current_member_id:
+        raise HTTPException(400, "User is not a member of the group")
+
+    my_split = aliased(ExpenseSplit)
+    payer_member = aliased(GroupMember)
+    payer_user = aliased(User)
+
+    q = (
+        select(
+            Expense,
+            func.coalesce(func.sum(my_split.amount), 0).label("my_share"),
+            payer_user.name.label("payer_name"),
+        )
+        # join to get my share
+        .outerjoin(
+            my_split,
+            (my_split.expense_id == Expense.id)
+            & (my_split.member_id == current_member_id),
+        )
+        # join to get payer name
+        .join(
+            payer_member,
+            payer_member.id == Expense.paid_by,
+        )
+        .join(
+            payer_user,
+            payer_user.id == payer_member.user_id,
+        )
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False,
+        )
+        .group_by(
+            Expense.id,
+            payer_user.name,
+        )
+        .order_by(
+            Expense.created_at.desc(),
+            Expense.id.desc(),
+        )
+    )
+
+    res = await db.execute(q)
+    rows = res.all()
+
+    return [
+        {
+            "id": expense.id,
+            "group_id": expense.group_id,
+            "title": expense.title,
+            "amount": float(expense.amount),
+            "paid_by": expense.paid_by,
+            "payer_name": payer_name,
+            "strategy": expense.strategy,
+            "created_at": expense.created_at,
+            "my_share": float(my_share),
+        }
+        for expense, my_share, payer_name in rows
+    ]

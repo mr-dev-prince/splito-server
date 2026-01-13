@@ -1,14 +1,14 @@
-from pydantic import BaseModel
-from typing import List
+from pydantic import BaseModel, condecimal
+from typing import List, Literal
 
 class SplitInput(BaseModel):
-    user_id: int
+    member_id: int
     amount: float
 
 class ExpenseCreate(BaseModel):
-    group_id : int
-    amount : float
-    description : str | None = None
+    title: str
+    amount: int
+    strategy: Literal["equal", "percentage", "exact"]
     splits: List[SplitInput]
 
 class ExpenseOut(BaseModel):
