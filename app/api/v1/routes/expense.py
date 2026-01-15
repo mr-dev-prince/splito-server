@@ -10,7 +10,6 @@ router = APIRouter()
 # working fine
 @router.post("/{group_id}/add")
 async def add_expense(group_id: int, data: ExpenseCreate, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-    print("Received data:", data)
     return await create_expense(db, data, current_user.id, group_id)
 
 # working fine

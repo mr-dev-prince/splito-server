@@ -4,10 +4,20 @@ from pydantic import BaseModel, model_validator
 class GroupCreate(BaseModel):
     name: str
 
-class GroupOut(BaseModel):
+class CreateGroupResponse(BaseModel):
+    id: int
+
+    class Config:
+        from_attributes = True
+
+class GroupListResponse(BaseModel):
     id: int
     name: str
     created_by: int
+    created_at: datetime
+    my_balance: float
+    member_count: int
+    is_admin: bool
 
     class Config:
         from_attributes = True
@@ -20,6 +30,7 @@ class GroupDetailOut(BaseModel):
     total_spent: float
     my_balance: float
     member_count: int
+    is_admin: bool
 
     class Config:
         from_attributes = True
