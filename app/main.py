@@ -10,12 +10,15 @@ from app.api.v1.routes.webhook import router as webhook_router
 
 app = FastAPI(title="Splitwise Backend")
 
-ENV = settings.ENV 
-CLIENT_URL = settings.CLIENT_URL if ENV == "production" else "*"
+origins = (
+    [settings.CLIENT_URL]
+    if settings.ENV == "production"
+    else ["http://localhost:3000"]
+)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[CLIENT_URL],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
