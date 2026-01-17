@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 from app.api.v1.routes.system import router as system_router
 from app.api.v1.routes.user import router as user_router
 from app.api.v1.routes.group import router as group_router
@@ -9,13 +10,20 @@ from app.api.v1.routes.webhook import router as webhook_router
 
 app = FastAPI(title="Splitwise Backend")
 
+ENV = settings.ENV 
+CLIENT_URL = settings.CLIENT_URL if ENV == "production" else "*"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[CLIENT_URL],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.head("/")
+async def head_root():
+    return {}
 
 @app.get("/") 
 async def root():
