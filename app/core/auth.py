@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, Request
+from fastapi import HTTPException, Request
 from app.core.security import verify_clerk_token
 
 def clerk_auth(request: Request):

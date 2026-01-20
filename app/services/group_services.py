@@ -1,17 +1,16 @@
+from decimal import Decimal
+from typing import Dict
+from fastapi import HTTPException
+from sqlalchemy import select, update, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from app.models.group import Group
 from app.models.group_member import GroupMember
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.models.user import User
 from app.schemas.group import GroupMemberIn
-from decimal import Decimal
-from typing import Dict
-from fastapi import HTTPException
-from sqlalchemy import func, case
-from app.core.utils import qround, simplify_debts
-from app.core.dependencies import ensure_user_in_group
+from app.core.utils import qround, simplify_debts, is_group_settled
+from app.core.dependencies import ensure_active_group_member
 
 # working fine
 async def create_group(db: AsyncSession, name: str, creator_id: int):
@@ -41,16 +40,43 @@ async def create_group(db: AsyncSession, name: str, creator_id: int):
 
     return group
 
-async def delete_group(db: AsyncSession, group_id: int, creator_id: int):
-    print("Deleting group:", group_id, "by user:", creator_id)
-    q = select(Group).where(Group.id == group_id, Group.created_by == creator_id)
-    res = await db.execute(q)
-    group = res.scalar_one_or_none()
+async def delete_group(
+    db: AsyncSession,
+    group_id: int,
+    creator_id: int,
+):
+    # Fetch group (must exist and not already deleted)
+    group = await db.scalar(
+        select(Group).where(
+            Group.id == group_id,
+            Group.created_by == creator_id,
+            Group.is_deleted == False,
+        )
+    )
 
     if not group:
         raise HTTPException(404, "Group doesn't exist")
-    
-    await db.delete(group)
+
+    # Check settlement
+    if not await is_group_settled(db, group_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Group has unsettled balances. Please settle before deleting."
+        )
+
+    # Soft-delete group
+    group.is_deleted = True
+
+    # Soft-delete all expenses in this group
+    await db.execute(
+        update(Expense)
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False,
+        )
+        .values(is_deleted=True)
+    )
+
     await db.commit()
 
     return {"status": "deleted"}
@@ -61,7 +87,7 @@ async def get_group_by_id(
     group_id: int,
     user_id: int,
 ):
-    await ensure_user_in_group(db, user_id, group_id)
+    await ensure_active_group_member(db, user_id, group_id)
 
     # -----------------------------
     # Current member + admin flag
@@ -74,6 +100,7 @@ async def get_group_by_id(
     )
 
     row = res.first()
+
     if not row:
         raise HTTPException(400, "User is not a member of the group")
 
@@ -326,6 +353,7 @@ async def list_group_for_user(db: AsyncSession, user_id: int):
         )
         .outerjoin(balance_subq, balance_subq.c.group_id == Group.id)
         .outerjoin(member_count_subq, member_count_subq.c.group_id == Group.id)
+        .where(Group.is_deleted == False)
         .order_by(Group.created_at.desc())
     )
 
@@ -348,7 +376,7 @@ async def list_group_for_user(db: AsyncSession, user_id: int):
     return groups
 
 async def list_group_members(db:AsyncSession, user_id:int, group_id: int):
-    await ensure_user_in_group(db, user_id, group_id)
+    await ensure_active_group_member(db, user_id, group_id)
 
     q = (
         select(GroupMember, User)

@@ -107,3 +107,87 @@ async def get_overall_net_map(db: AsyncSession) -> Dict[int, Decimal]:
         )
 
     return net
+
+async def get_group_net_balances(
+    db: AsyncSession,
+    group_id: int,
+) -> Dict[int, Decimal]:
+    """
+    Returns:
+        {
+            member_id: net_balance (Decimal)
+        }
+
+    net_balance = total_paid - total_owed
+    """
+
+    # Total paid by each member
+    paid_q = (
+        select(
+            Expense.paid_by.label("member_id"),
+            func.coalesce(func.sum(Expense.amount), 0).label("paid")
+        )
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False
+        )
+        .group_by(Expense.paid_by)
+    )
+
+    paid_res = await db.execute(paid_q)
+    paid_map = {
+        row.member_id: Decimal(str(row.paid))
+        for row in paid_res
+    }
+
+    # Total owed by each member
+    owed_q = (
+        select(
+            ExpenseSplit.member_id,
+            func.coalesce(func.sum(ExpenseSplit.amount), 0).label("owed")
+        )
+        .join(Expense, Expense.id == ExpenseSplit.expense_id)
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False
+        )
+        .group_by(ExpenseSplit.member_id)
+    )
+
+    owed_res = await db.execute(owed_q)
+    owed_map = {
+        row.member_id: Decimal(str(row.owed))
+        for row in owed_res
+    }
+
+    # Union of all members involved
+    member_ids = set(paid_map.keys()) | set(owed_map.keys())
+
+    net: Dict[int, Decimal] = {}
+    for member_id in member_ids:
+        net[member_id] = (
+            paid_map.get(member_id, Decimal("0"))
+            - owed_map.get(member_id, Decimal("0"))
+        )
+
+    return net
+
+async def is_group_settled(
+    db: AsyncSession,
+    group_id: int,
+    tolerance: Decimal = Decimal("0.05"),
+) -> bool:
+    """
+    A group is settled if:
+        abs(net_balance) <= tolerance
+        for every member
+    """
+
+    net_balances = await get_group_net_balances(db, group_id)
+
+    for amount in net_balances.values():
+        if abs(amount) > tolerance:
+            return False
+
+    return True
+

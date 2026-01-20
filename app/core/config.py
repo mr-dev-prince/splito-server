@@ -4,7 +4,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     CLERK_SIGNING_SECRET:str
     ENV: str = "development"
-    CLIENT_URL: str = "http://localhost:3000"
+    CLIENT_URL: str = "http://localhost:5173"
 
     class Config:
         env_file = ".env"

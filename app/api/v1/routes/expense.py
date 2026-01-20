@@ -17,11 +17,9 @@ async def add_expense(group_id: int, data: ExpenseCreate, db: AsyncSession = Dep
 async def all_expenses(group_id: int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
     return await get_expenses_by_group(db, group_id, current_user.id)
 
+# working fine
 @router.delete("/{expense_id}")
 async def del_expense(expense_id: int, db:AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-    # TODO : allow deletion only 
-        # if user is admin
-        # if every member has settled their share
     return await delete_expense(db, user_id=current_user.id, expense_id=expense_id)
 
 @router.patch("/{expense_id}")

@@ -1,4 +1,4 @@
-from app.core.dependencies import ensure_user_in_group
+from app.core.dependencies import ensure_active_group_member, fetch_member_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import aliased
@@ -15,7 +15,7 @@ from fastapi import HTTPException
 
 # working fine
 async def create_expense(db: AsyncSession, data: ExpenseCreate, paid_by: int, group_id: int):
-    await ensure_user_in_group(db, paid_by, group_id)
+    await ensure_active_group_member(db, paid_by, group_id)
 
     payer_member_id = select(GroupMember.id).where(
         GroupMember.group_id == group_id,
@@ -103,7 +103,7 @@ async def create_expense(db: AsyncSession, data: ExpenseCreate, paid_by: int, gr
 
 async def delete_expense(db: AsyncSession, user_id: int, expense_id: int):
     # Fetch expense
-    q = select(Expense).where(Expense.id == expense_id)
+    q = select(Expense).where(Expense.id == expense_id, Expense.is_deleted == False)
     res = await db.execute(q)
     expense = res.scalar_one_or_none()
 
@@ -117,7 +117,6 @@ async def delete_expense(db: AsyncSession, user_id: int, expense_id: int):
     # Cascade deletes ExpenseSplit if relationship is set
     expense.is_deleted = True
     await db.commit()
-
 
     return {"status": "deleted"}
 
@@ -332,7 +331,7 @@ async def get_expense_by_id(
         .join(User, User.id == Expense.paid_by)
         .where(
             Expense.id == expense_id,
-            # Expense.is_deleted == False
+            Expense.is_deleted == False
         )
     )
 
@@ -388,21 +387,15 @@ async def get_expense_by_id(
         "splits": splits
     }
 
+# working fine
 async def get_expenses_by_group(
     db: AsyncSession,
     group_id: int,
     user_id: int,
 ):
-    await ensure_user_in_group(db, user_id, group_id)
+    await ensure_active_group_member(db, user_id, group_id)
 
-    # get current member id
-    res = await db.execute(
-        select(GroupMember.id).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
-        )
-    )
-    current_member_id = res.scalar_one_or_none()
+    current_member_id = await fetch_member_id(db, user_id, group_id)
 
     if not current_member_id:
         raise HTTPException(400, "User is not a member of the group")

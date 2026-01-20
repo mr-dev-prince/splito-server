@@ -13,7 +13,7 @@ app = FastAPI(title="Splitwise Backend")
 origins = (
     [settings.CLIENT_URL]
     if settings.ENV == "production"
-    else ["http://localhost:3000"]
+    else ["http://localhost:5173"]
 )
 
 app.add_middleware(

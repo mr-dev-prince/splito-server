@@ -49,21 +49,40 @@ async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
 
     return member
 
-async def ensure_user_in_group(
+async def ensure_active_group_member(
     db: AsyncSession,
     user_id: int,
-    group_id: int
+    group_id: int,
 ):
-    q = select(
-        exists().where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
+    # Check group exists and is not deleted
+    group = await db.scalar(
+        select(Group.id).where(
+            Group.id == group_id,
+            Group.is_deleted == False,
         )
     )
-    result = await db.execute(q)
 
-    if not result.scalar():
-        raise HTTPException(status_code=403, detail="Unauthorized access")
+    if not group:
+        raise HTTPException(
+            status_code=404,
+            detail="Group not found or has been deleted",
+        )
+
+    # Check membership
+    is_member = await db.scalar(
+        select(
+            exists().where(
+                GroupMember.group_id == group_id,
+                GroupMember.user_id == user_id,
+            )
+        )
+    )
+
+    if not is_member:
+        raise HTTPException(
+            status_code=403,
+            detail="Unauthorized access",
+        )
 
 async def fetch_member_id(
         db: AsyncSession,
@@ -81,3 +100,7 @@ async def fetch_member_id(
         raise HTTPException(status_code=404, detail="Membership not found")
 
     return member_id
+
+
+
+
