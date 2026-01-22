@@ -57,3 +57,9 @@ class GroupMemberIn(BaseModel):
         if not self.email and not self.phone:
             raise ValueError("Email or phone is required")
         return self
+
+class UpdateGroupName(BaseModel):
+    name: str | None = None
+
+class UpdateGroupResponse(BaseModel):
+    message: str

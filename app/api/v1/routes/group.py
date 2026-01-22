@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from app.schemas.user import AuthUser
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.services.group_services import create_group, add_member, list_group_for_user, list_group_members, delete_group, remove_member, exit_group, edit_group, get_group_settlement_plan, list_group_expenses, get_group_by_id
-from app.schemas.group import GroupCreate,CreateGroupResponse, GroupDetailOut, GroupMemberOut, GroupListResponse, GroupMemberIn
+from app.services.group_services import create_group, add_member, list_group_for_user, list_group_members, delete_group, remove_member, exit_group, edit_group, get_group_settlement_plan, list_group_expenses, get_group_by_id, weekly_activity
+from app.schemas.group import GroupCreate,CreateGroupResponse, GroupDetailOut, GroupMemberOut, GroupListResponse, GroupMemberIn, UpdateGroupName, UpdateGroupResponse
 from app.schemas.balances import GroupBalanceOut
 from app.core.dependencies import get_current_user, check_group_membership
 from app.services.settlement_service import compute_group_settlements, add_settlement, get_settlement_history,undo_settlement
@@ -31,17 +31,22 @@ async def get_groups(db: AsyncSession = Depends(get_db), user : AuthUser = Depen
 async def get_group_data(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user: AuthUser = Depends(get_current_user)
 ):
     return await get_group_by_id(db, group_id, current_user.id)
-    
-# @router.patch("/{group_id}")
-# async def edit(group_id: int, data, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-#     await check_group_membership(db, group_id, current_user.id)
-#     return await edit_group(db, group_id, current_user.id, data)
 
-@router.delete("/{group_id}")
-async def del_group(group_id: int, db: AsyncSession = Depends(get_db), current_user: int = Depends(get_current_user)):
+@router.patch("/{group_id}", response_model=UpdateGroupResponse, description="edit group details")
+async def edit(
+    group_id: int, 
+    data : UpdateGroupName, 
+    db: AsyncSession = Depends(get_db), 
+    current_user: AuthUser = Depends(get_current_user)
+):
+    return await edit_group(db, group_id, current_user.id, data)
+
+# working fine
+@router.delete("/{group_id}") 
+async def del_group(group_id: int, db: AsyncSession = Depends(get_db), current_user: AuthUser = Depends(get_current_user)):
     return await delete_group(db, group_id=group_id, creator_id=current_user.id)
 
 # working fine
@@ -53,6 +58,15 @@ async def add_group_member(
     current_user: AuthUser = Depends(get_current_user),
 ):
     return await add_member(db, group_id, data, current_user.id)
+
+# working fine
+@router.get("/{group_id}/weekly-activity")
+async def get_weekly_activity(
+    group_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: AuthUser = Depends(get_current_user)
+): 
+    return await weekly_activity(db, group_id, current_user.id)
 
 # @router.delete("/{group_id}/remove/{user_id}")
 # async def rem_mem(group_id: int, user_id : int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):

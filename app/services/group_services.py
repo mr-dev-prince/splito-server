@@ -1,16 +1,18 @@
 from decimal import Decimal
 from typing import Dict
 from fastapi import HTTPException
-from sqlalchemy import select, update, func, case
+from sqlalchemy import select, update, func, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.group import Group
 from app.models.group_member import GroupMember
 from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.models.user import User
-from app.schemas.group import GroupMemberIn
+from app.schemas.group import GroupMemberIn, UpdateGroupName
 from app.core.utils import qround, simplify_debts, is_group_settled
-from app.core.dependencies import ensure_active_group_member
+from app.core.dependencies import ensure_active_group_member, fetch_member_id
+from datetime import datetime, timedelta
+
 
 # working fine
 async def create_group(db: AsyncSession, name: str, creator_id: int):
@@ -40,6 +42,7 @@ async def create_group(db: AsyncSession, name: str, creator_id: int):
 
     return group
 
+# working fine
 async def delete_group(
     db: AsyncSession,
     group_id: int,
@@ -237,6 +240,53 @@ async def add_member(
 
     return member
 
+# working fine
+async def weekly_activity(
+    db: AsyncSession,
+    group_id: int,
+    user_id: int,
+):
+    member_id = await fetch_member_id(db, user_id, group_id)
+    if not member_id:
+        raise HTTPException(403, "Not a member of this group")
+
+    today = datetime.utcnow().date()
+    days = [(today - timedelta(days=i)) for i in range(6, -1, -1)]
+
+    seven_days_ago = today - timedelta(days=6)
+
+    q = (
+        select(
+            func.date(Expense.created_at).label("day"),
+            func.coalesce(func.sum(ExpenseSplit.amount), 0).label("amount"),
+        )
+        .join(Expense, Expense.id == ExpenseSplit.expense_id)
+        .where(
+            Expense.group_id == group_id,
+            Expense.is_deleted == False,
+            Expense.created_at >= seven_days_ago,
+            ExpenseSplit.member_id == member_id,
+        )
+        .group_by(func.date(Expense.created_at))
+    )
+
+    res = await db.execute(q)
+
+    db_data = {
+        row.day: float(Decimal(str(row.amount)))
+        for row in res.all()
+    }
+
+    # Fill missing days with 0
+    daily = []
+    for d in days:
+        daily.append({
+            "day": d.isoformat(),
+            "amount": db_data.get(d, 0.0)
+        })
+
+    return {"daily": daily}
+
 async def remove_member(db: AsyncSession, group_id: int, user_id: int, creator_id: int):
     #TODO: if balance due, restrict removal of member
     res1 = await db.execute(select(Group).where(Group.id == group_id))
@@ -399,7 +449,7 @@ async def list_group_members(db:AsyncSession, user_id:int, group_id: int):
 
     return members
 
-async def edit_group(db: AsyncSession, group_id: int, user_id: int, data):
+async def edit_group(db: AsyncSession, group_id: int, user_id: int, data: UpdateGroupName):
     q = select(Group).where(Group.id == group_id)
     res = await db.execute(q)
     group = res.scalar_one_or_none()
@@ -413,11 +463,9 @@ async def edit_group(db: AsyncSession, group_id: int, user_id: int, data):
     if data.name:
         group.name = data.name
 
-    #TODO: add group descriptions
-
     await db.commit()
     await db.refresh(group)
-    return group
+    return {"message": "Group updated successfully"}
 
 async def get_group_net_balances(db : AsyncSession, group_id: int) -> Dict[int, Decimal]:
     paid_q = (
