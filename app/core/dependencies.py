@@ -8,14 +8,16 @@ from sqlalchemy import select, exists
 from app.models.group import Group
 from app.models.group_member import GroupMember
 
-async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)) -> AuthUser:
-    payload = verify_clerk_token(request)
-    clerk_user_id = payload["sub"]
 
-    result = await db.execute(
-        select(User).where(User.clerk_user_id == clerk_user_id)
-    )
+async def get_current_user(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> AuthUser:
+    payload = await verify_clerk_token(request)
+    print(payload)
+    clerk_user_id = payload["sub"]
     
+    result = await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))
+
     user = result.scalar_one_or_none()
 
     if not user or not user.is_active:
@@ -25,9 +27,10 @@ async def get_current_user(request: Request,db: AsyncSession = Depends(get_db)) 
         id=user.id,
         clerk_user_id=user.clerk_user_id,
         email=user.email,
-        is_active=user.is_active
+        is_active=user.is_active,
     )
-    
+
+
 async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
     q_group = select(Group).where(Group.id == group_id)
     res_group = await db.execute(q_group)
@@ -37,8 +40,7 @@ async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
         raise HTTPException(404, "Group does not exist")
 
     q_member = select(GroupMember).where(
-        GroupMember.group_id == group_id,
-        GroupMember.user_id == user_id
+        GroupMember.group_id == group_id, GroupMember.user_id == user_id
     )
 
     res_member = await db.execute(q_member)
@@ -48,6 +50,7 @@ async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
         raise HTTPException(403, "You are not a member of this group")
 
     return member
+
 
 async def ensure_active_group_member(
     db: AsyncSession,
@@ -84,14 +87,10 @@ async def ensure_active_group_member(
             detail="Unauthorized access",
         )
 
-async def fetch_member_id(
-        db: AsyncSession,
-        user_id: int,
-        group_id: int
-):
+
+async def fetch_member_id(db: AsyncSession, user_id: int, group_id: int):
     q = select(GroupMember.id).where(
-        GroupMember.user_id == user_id,
-        GroupMember.group_id == group_id
+        GroupMember.user_id == user_id, GroupMember.group_id == group_id
     )
     result = await db.execute(q)
     member_id = result.scalar_one_or_none()
@@ -100,7 +99,3 @@ async def fetch_member_id(
         raise HTTPException(status_code=404, detail="Membership not found")
 
     return member_id
-
-
-
-
