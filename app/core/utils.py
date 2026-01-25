@@ -7,29 +7,32 @@ from app.models.expense_split import ExpenseSplit
 from collections import deque
 
 getcontext().prec = 28
-CENTS= Decimal("0.01")
+CENTS = Decimal("0.01")
 
-def qround(d : Decimal) -> Decimal:
+def qround(d: Decimal) -> Decimal:
     return d.quantize(CENTS, rounding=ROUND_HALF_UP)
 
+
 def simplify_debts(net_map: Dict[int, Decimal]):
+    """
+    Standard Greedy algorithm to minimize number of transactions.
+    """
     creditors = []
     debtors = []
 
     for uid, bal in net_map.items():
-        if bal > 0:
+        if bal > Decimal("0.01"):  # Avoid floating point noise
             creditors.append([uid, bal])
-        elif bal < 0:
+        elif bal < Decimal("-0.01"):
             debtors.append([uid, -bal])
-    
 
-    creditors.sort(key= lambda x: x[1], reverse=True)
-    debtors.sort(key= lambda x: x[1], reverse=True)
+    creditors.sort(key=lambda x: x[1], reverse=True)
+    debtors.sort(key=lambda x: x[1], reverse=True)
 
     creditors = deque(creditors)
     debtors = deque(debtors)
 
-    transfers : List[Tuple[int, int, Decimal]] = []
+    transfers: List[Tuple[int, int, Decimal]] = []
 
     while creditors and debtors:
         cred_id, cred_amt = creditors[0]
@@ -37,7 +40,8 @@ def simplify_debts(net_map: Dict[int, Decimal]):
 
         pay_amt = qround(min(cred_amt, debt_amt))
 
-        transfers.append((debt_id, cred_id, pay_amt))
+        if pay_amt > 0:
+            transfers.append((debt_id, cred_id, pay_amt))
 
         new_cred = qround(cred_amt - pay_amt)
         new_debt = qround(debt_amt - pay_amt)
@@ -49,10 +53,14 @@ def simplify_debts(net_map: Dict[int, Decimal]):
             creditors.appendleft([cred_id, new_cred])
         if new_debt > Decimal("0"):
             debtors.appendleft([debt_id, new_debt])
+
     return transfers
 
+
 async def get_user_total_balance(db: AsyncSession, user_id: int):
-    paid_q = select(func.coalesce(func.sum(Expense.amount), 0)).where(Expense.paid_by == user_id)
+    paid_q = select(func.coalesce(func.sum(Expense.amount), 0)).where(
+        Expense.paid_by == user_id
+    )
     paid_res = await db.execute(paid_q)
     paid = Decimal(str(paid_res.scalar() or 0))
 
@@ -64,49 +72,38 @@ async def get_user_total_balance(db: AsyncSession, user_id: int):
 
     owed_res = await db.execute(owed_q)
     owed = Decimal(str(owed_res.scalar() or 0))
-    
+
     return qround(paid - owed)
+
 
 async def get_overall_net_map(db: AsyncSession) -> Dict[int, Decimal]:
     paid_q = (
-        select(
-            Expense.paid_by,
-            func.coalesce(func.sum(Expense.amount), 0)
-        )
+        select(Expense.paid_by, func.coalesce(func.sum(Expense.amount), 0))
         .where(Expense.is_deleted == False)
         .group_by(Expense.paid_by)
     )
     paid_res = await db.execute(paid_q)
-    paid_map = {
-        uid: qround(Decimal(str(amt)))
-        for uid, amt in paid_res.all()
-    }
+    paid_map = {uid: qround(Decimal(str(amt))) for uid, amt in paid_res.all()}
 
     owed_q = (
-        select(
-            ExpenseSplit.user_id,
-            func.coalesce(func.sum(ExpenseSplit.amount), 0)
-        )
+        select(ExpenseSplit.user_id, func.coalesce(func.sum(ExpenseSplit.amount), 0))
         .join(Expense, Expense.id == ExpenseSplit.expense_id)
         .where(Expense.is_deleted == False)
         .group_by(ExpenseSplit.user_id)
     )
     owed_res = await db.execute(owed_q)
-    owed_map = {
-        uid: qround(Decimal(str(amt)))
-        for uid, amt in owed_res.all()
-    }
+    owed_map = {uid: qround(Decimal(str(amt))) for uid, amt in owed_res.all()}
 
     user_ids = set(paid_map) | set(owed_map)
 
     net = {}
     for uid in user_ids:
         net[uid] = qround(
-            paid_map.get(uid, Decimal("0")) -
-            owed_map.get(uid, Decimal("0"))
+            paid_map.get(uid, Decimal("0")) - owed_map.get(uid, Decimal("0"))
         )
 
     return net
+
 
 async def get_group_net_balances(
     db: AsyncSession,
@@ -125,52 +122,40 @@ async def get_group_net_balances(
     paid_q = (
         select(
             Expense.paid_by.label("member_id"),
-            func.coalesce(func.sum(Expense.amount), 0).label("paid")
+            func.coalesce(func.sum(Expense.amount), 0).label("paid"),
         )
-        .where(
-            Expense.group_id == group_id,
-            Expense.is_deleted == False
-        )
+        .where(Expense.group_id == group_id, Expense.is_deleted == False)
         .group_by(Expense.paid_by)
     )
 
     paid_res = await db.execute(paid_q)
-    paid_map = {
-        row.member_id: Decimal(str(row.paid))
-        for row in paid_res
-    }
+    paid_map = {row.member_id: Decimal(str(row.paid)) for row in paid_res}
 
     # Total owed by each member
     owed_q = (
         select(
             ExpenseSplit.member_id,
-            func.coalesce(func.sum(ExpenseSplit.amount), 0).label("owed")
+            func.coalesce(func.sum(ExpenseSplit.amount), 0).label("owed"),
         )
         .join(Expense, Expense.id == ExpenseSplit.expense_id)
-        .where(
-            Expense.group_id == group_id,
-            Expense.is_deleted == False
-        )
+        .where(Expense.group_id == group_id, Expense.is_deleted == False)
         .group_by(ExpenseSplit.member_id)
     )
 
     owed_res = await db.execute(owed_q)
-    owed_map = {
-        row.member_id: Decimal(str(row.owed))
-        for row in owed_res
-    }
+    owed_map = {row.member_id: Decimal(str(row.owed)) for row in owed_res}
 
     # Union of all members involved
     member_ids = set(paid_map.keys()) | set(owed_map.keys())
 
     net: Dict[int, Decimal] = {}
     for member_id in member_ids:
-        net[member_id] = (
-            paid_map.get(member_id, Decimal("0"))
-            - owed_map.get(member_id, Decimal("0"))
+        net[member_id] = paid_map.get(member_id, Decimal("0")) - owed_map.get(
+            member_id, Decimal("0")
         )
 
     return net
+
 
 async def is_group_settled(
     db: AsyncSession,
@@ -190,4 +175,3 @@ async def is_group_settled(
             return False
 
     return True
-

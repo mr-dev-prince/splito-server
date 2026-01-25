@@ -13,7 +13,6 @@ async def get_current_user(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> AuthUser:
     payload = await verify_clerk_token(request)
-    print(payload)
     clerk_user_id = payload["sub"]
     
     result = await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))

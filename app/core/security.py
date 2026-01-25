@@ -48,13 +48,12 @@ async def get_jwks():
 def get_bearer_token(request: Request) -> str:
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing token")
+        raise HTTPException(status_code=401, detail="Unauthorized Request")
     return auth.split(" ")[1]
 
 
 async def verify_clerk_token(request: Request):
     token = get_bearer_token(request)
-
     try:
         unverified_header = jwt.get_unverified_header(token)
         jwks = await get_jwks()
@@ -72,7 +71,7 @@ async def verify_clerk_token(request: Request):
         return payload
 
     except StopIteration:
-        raise HTTPException(401, "Invalid token key")
+        raise HTTPException(401, "Unauthorized access")
     except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Token expired")
     except jwt.JWTError:
