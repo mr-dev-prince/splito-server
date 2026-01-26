@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Dict
 from fastapi import HTTPException
-from sqlalchemy import select, update, func, case, text
+from sqlalchemy import select, update, func, case, text, extract, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.group import Group
 from app.models.group_member import GroupMember
@@ -42,6 +42,7 @@ async def create_group(db: AsyncSession, name: str, creator_id: int):
 
     return group
 
+
 # working fine
 async def delete_group(
     db: AsyncSession,
@@ -64,7 +65,7 @@ async def delete_group(
     if not await is_group_settled(db, group_id):
         raise HTTPException(
             status_code=400,
-            detail="Group has unsettled balances. Please settle before deleting."
+            detail="Group has unsettled balances. Please settle before deleting.",
         )
 
     # Soft-delete group
@@ -83,6 +84,7 @@ async def delete_group(
     await db.commit()
 
     return {"status": "deleted"}
+
 
 # working fine
 async def get_group_by_id(
@@ -155,9 +157,7 @@ async def get_group_by_id(
     # -----------------------------
     member_count = (
         await db.execute(
-            select(func.count(GroupMember.id)).where(
-                GroupMember.group_id == group_id
-            )
+            select(func.count(GroupMember.id)).where(GroupMember.group_id == group_id)
         )
     ).scalar()
 
@@ -165,9 +165,7 @@ async def get_group_by_id(
     # Group
     # -----------------------------
     group = (
-        await db.execute(
-            select(Group).where(Group.id == group_id)
-        )
+        await db.execute(select(Group).where(Group.id == group_id))
     ).scalar_one_or_none()
 
     if not group:
@@ -187,6 +185,7 @@ async def get_group_by_id(
         "is_admin": is_admin,
     }
 
+
 # working fine
 async def add_member(
     db: AsyncSession,
@@ -194,9 +193,7 @@ async def add_member(
     data: GroupMemberIn,
     creator_id: int,
 ):
-    group = await db.scalar(
-        select(Group).where(Group.id == group_id)
-    )
+    group = await db.scalar(select(Group).where(Group.id == group_id))
 
     if not group:
         raise HTTPException(404, "Group doesn't exist")
@@ -208,9 +205,11 @@ async def add_member(
     exists = await db.scalar(
         select(GroupMember).where(
             GroupMember.group_id == group_id,
-            GroupMember.email == data.email
-            if data.email else
-            GroupMember.phone == data.phone
+            (
+                GroupMember.email == data.email
+                if data.email
+                else GroupMember.phone == data.phone
+            ),
         )
     )
 
@@ -220,9 +219,7 @@ async def add_member(
     # Try to link user by email
     user_id = None
     if data.email:
-        user = await db.scalar(
-            select(User).where(User.email == data.email)
-        )
+        user = await db.scalar(select(User).where(User.email == data.email))
         if user:
             user_id = user.id
 
@@ -239,6 +236,7 @@ async def add_member(
     await db.refresh(member)
 
     return member
+
 
 # working fine
 async def weekly_activity(
@@ -272,23 +270,18 @@ async def weekly_activity(
 
     res = await db.execute(q)
 
-    db_data = {
-        row.day: float(Decimal(str(row.amount)))
-        for row in res.all()
-    }
+    db_data = {row.day: float(Decimal(str(row.amount))) for row in res.all()}
 
     # Fill missing days with 0
     daily = []
     for d in days:
-        daily.append({
-            "day": d.isoformat(),
-            "amount": db_data.get(d, 0.0)
-        })
+        daily.append({"day": d.isoformat(), "amount": db_data.get(d, 0.0)})
 
     return {"daily": daily}
 
+
 async def remove_member(db: AsyncSession, group_id: int, user_id: int, creator_id: int):
-    #TODO: if balance due, restrict removal of member
+    # TODO: if balance due, restrict removal of member
     res1 = await db.execute(select(Group).where(Group.id == group_id))
     group = res1.scalar_one_or_none()
 
@@ -303,8 +296,7 @@ async def remove_member(db: AsyncSession, group_id: int, user_id: int, creator_i
 
     res = await db.execute(
         select(GroupMember).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
+            GroupMember.group_id == group_id, GroupMember.user_id == user_id
         )
     )
     member = res.scalar_one_or_none()
@@ -317,8 +309,9 @@ async def remove_member(db: AsyncSession, group_id: int, user_id: int, creator_i
 
     return {"status": "member_removed"}
 
+
 async def exit_group(db: AsyncSession, group_id: int, user_id: int):
-    #TODO : if balance is due, restrict user to exit
+    # TODO : if balance is due, restrict user to exit
     res = await db.execute(select(Group).where(Group.id == group_id))
     group = res.scalar_one_or_none()
 
@@ -330,8 +323,7 @@ async def exit_group(db: AsyncSession, group_id: int, user_id: int):
 
     res_mem = await db.execute(
         select(GroupMember).where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
+            GroupMember.group_id == group_id, GroupMember.user_id == user_id
         )
     )
     member = res_mem.scalar_one_or_none()
@@ -343,6 +335,7 @@ async def exit_group(db: AsyncSession, group_id: int, user_id: int):
     await db.commit()
 
     return {"status": "exited_group"}
+
 
 # working fine
 async def list_group_for_user(db: AsyncSession, user_id: int):
@@ -398,8 +391,7 @@ async def list_group_for_user(db: AsyncSession, user_id: int):
         )
         .join(
             GroupMember,
-            (GroupMember.group_id == Group.id)
-            & (GroupMember.user_id == user_id),
+            (GroupMember.group_id == Group.id) & (GroupMember.user_id == user_id),
         )
         .outerjoin(balance_subq, balance_subq.c.group_id == Group.id)
         .outerjoin(member_count_subq, member_count_subq.c.group_id == Group.id)
@@ -425,7 +417,8 @@ async def list_group_for_user(db: AsyncSession, user_id: int):
 
     return groups
 
-async def list_group_members(db:AsyncSession, user_id:int, group_id: int):
+
+async def list_group_members(db: AsyncSession, user_id: int, group_id: int):
     await ensure_active_group_member(db, user_id, group_id)
 
     q = (
@@ -438,28 +431,33 @@ async def list_group_members(db:AsyncSession, user_id:int, group_id: int):
 
     members = []
     for gm, user in result.all():
-        members.append({
-            "id": gm.id,
-            "name": gm.name,
-            "email": gm.email or (user.email if user else None),
-            "phone": gm.phone,
-            "is_admin": gm.is_admin,
-            "user_id": gm.user_id,
-        })
+        members.append(
+            {
+                "id": gm.id,
+                "name": gm.name,
+                "email": gm.email or (user.email if user else None),
+                "phone": gm.phone,
+                "is_admin": gm.is_admin,
+                "user_id": gm.user_id,
+            }
+        )
 
     return members
 
-async def edit_group(db: AsyncSession, group_id: int, user_id: int, data: UpdateGroupName):
+# working fine
+async def edit_group(
+    db: AsyncSession, group_id: int, user_id: int, data: UpdateGroupName
+):
     q = select(Group).where(Group.id == group_id)
     res = await db.execute(q)
     group = res.scalar_one_or_none()
 
     if not group:
         raise HTTPException(404, "Group doesn't exist")
-    
+
     if group.created_by != user_id:
         raise HTTPException(403, "Only group admin can edit group")
-    
+
     if data.name:
         group.name = data.name
 
@@ -467,7 +465,8 @@ async def edit_group(db: AsyncSession, group_id: int, user_id: int, data: Update
     await db.refresh(group)
     return {"message": "Group updated successfully"}
 
-async def get_group_net_balances(db : AsyncSession, group_id: int) -> Dict[int, Decimal]:
+
+async def get_group_net_balances(db: AsyncSession, group_id: int) -> Dict[int, Decimal]:
     paid_q = (
         select(Expense.paid_by, func.coalesce(func.sum(Expense.amount), 0))
         .where(Expense.group_id == group_id)
@@ -496,14 +495,18 @@ async def get_group_net_balances(db : AsyncSession, group_id: int) -> Dict[int, 
     for uid in user_ids:
         p = paid_map.get(uid, Decimal("0"))
         o = owed_map.get(uid, Decimal("0"))
-        net[uid] = qround(p-o)
+        net[uid] = qround(p - o)
 
     return net
+
 
 async def get_group_settlement_plan(db: AsyncSession, group_id: int):
     net = await get_group_net_balances(db, group_id=group_id)
 
-    net = {uid: (qround(amount)) if abs(amount) >= Decimal("0.005") else Decimal("0") for uid, amount in net.items()}
+    net = {
+        uid: (qround(amount)) if abs(amount) >= Decimal("0.005") else Decimal("0")
+        for uid, amount in net.items()
+    }
 
     net = {uid: amt for uid, amt in net.items() if amt != 0}
 
@@ -513,49 +516,43 @@ async def get_group_settlement_plan(db: AsyncSession, group_id: int):
         user_ids = set()
 
         for f, t, _ in transfers:
-            user_ids.add(f); user_ids.add(t)
+            user_ids.add(f)
+            user_ids.add(t)
         q = select(User.id, User.name).where(User.id.in_(list(user_ids)))
         res = await db.execute(q)
         users = {row[0]: row[1] for row in res.all()}
 
         plan = [
             {
-                "from_id": f, "from_name": users.get(f),
-                "to_id": t, "to_name": users.get(t),
-                "amount": float(a)
+                "from_id": f,
+                "from_name": users.get(f),
+                "to_id": t,
+                "to_name": users.get(t),
+                "amount": float(a),
             }
             for f, t, a in transfers
         ]
     else:
         plan = []
 
-    return {"net": {uid: float(amount) for uid, amount in net.items()}, "settlements": plan}
+    return {
+        "net": {uid: float(amount) for uid, amount in net.items()},
+        "settlements": plan,
+    }
 
-async def list_group_expenses(
-        db: AsyncSession,
-        user_id: int,
-        group_id: int
-):
-    check_q = (
-        select(GroupMember)
-        .where(
-            GroupMember.group_id == group_id,
-            GroupMember.user_id == user_id
-        )
+
+async def list_group_expenses(db: AsyncSession, user_id: int, group_id: int):
+    check_q = select(GroupMember).where(
+        GroupMember.group_id == group_id, GroupMember.user_id == user_id
     )
 
     check = await db.execute(check_q)
 
     if not check.scalar():
         raise HTTPException(status_code=403, detail="Unauthorized Access")
-    
 
     expense_q = (
-        select(
-            Expense,
-            User.id.label("payer_id"),
-            User.name.label("payer_name")
-        )
+        select(Expense, User.id.label("payer_id"), User.name.label("payer_name"))
         .join(User, User.id == Expense.paid_by)
         .where(
             Expense.group_id == group_id,
@@ -569,17 +566,12 @@ async def list_group_expenses(
 
     if not expense_res:
         return []
-    
-    expense_ids =[row.Expense.id for row in expense_rows]
 
-    splits_q = (
-        select(
-            ExpenseSplit.expense_id,
-            ExpenseSplit.user_id,
-            ExpenseSplit.amount
-        )
-        .where(ExpenseSplit.expense_id.in_(expense_ids))
-    )
+    expense_ids = [row.Expense.id for row in expense_rows]
+
+    splits_q = select(
+        ExpenseSplit.expense_id, ExpenseSplit.user_id, ExpenseSplit.amount
+    ).where(ExpenseSplit.expense_id.in_(expense_ids))
 
     splits_res = await db.execute(splits_q)
     split_rows = splits_res.all()
@@ -587,26 +579,123 @@ async def list_group_expenses(
     splits_map = {}
 
     for expense_id, user_id, amount in split_rows:
-        splits_map.setdefault(expense_id, []).append({
-            "user_id" : user_id,
-            "amount": str(qround(Decimal(str(amount))))
-        })
-    
+        splits_map.setdefault(expense_id, []).append(
+            {"user_id": user_id, "amount": str(qround(Decimal(str(amount))))}
+        )
+
     result = []
     for row in expense_rows:
         expense = row.Expense
-        result.append({
-            "id": expense.id,
-            "description": expense.description,
-            "amount": str(qround(Decimal(str(expense.amount)))),
-            "created_at": expense.created_at,
-            "paid_by": {
-                "id": row.payer_id,
-                "name": row.payer_name
-            },
-            "splits": splits_map.get(expense.id, [])
-        })
-    
+        result.append(
+            {
+                "id": expense.id,
+                "description": expense.description,
+                "amount": str(qround(Decimal(str(expense.amount)))),
+                "created_at": expense.created_at,
+                "paid_by": {"id": row.payer_id, "name": row.payer_name},
+                "splits": splits_map.get(expense.id, []),
+            }
+        )
+
     return result
+
+
+async def group_analytics_service(db: AsyncSession, user_id: int):
+    # 1. Setup Time Boundaries
+    now = datetime.now()
+    first_of_month = datetime(now.year, now.month, 1)
+
+    # Base query for user's expenses (via splits)
+    # We join ExpenseSplit -> Expense -> Group to get names and dates
+    base_stmt = (
+        select(
+            ExpenseSplit.amount,
+            Expense.created_at,
+            Group.id.label("group_id"),
+            Group.name.label("group_name"),
+        )
+        .join(Expense, ExpenseSplit.expense_id == Expense.id)
+        .join(Group, Expense.group_id == Group.id)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(GroupMember.user_id == user_id)
+        .filter(Expense.is_deleted == False)
+    )
+
+    # --- Calculation 1: Current Month Total ---
+    mtd_stmt = (
+        select(func.sum(ExpenseSplit.amount))
+        .join(Expense, ExpenseSplit.expense_id == Expense.id)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(GroupMember.user_id == user_id)
+        .filter(Expense.created_at >= first_of_month)
+        .filter(Expense.is_deleted == False)
+    )
+
+    mtd_res = await db.execute(mtd_stmt)
+    mtd_total = mtd_res.scalar() or Decimal("0.00")
+
+    # --- Calculation 2: Lifetime Total ---
+    lifetime_stmt = (
+        select(func.sum(ExpenseSplit.amount))
+        .join(Expense, ExpenseSplit.expense_id == Expense.id)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(GroupMember.user_id == user_id)
+        .filter(Expense.is_deleted == False)
+    )
+
+    lifetime_res = await db.execute(lifetime_stmt)
+    lifetime_total = lifetime_res.scalar() or Decimal("0.00")
+
+    # --- Calculation 3: Top-3 Expense Groups ---
+    top_groups_stmt = (
+        select(Group.name, func.sum(ExpenseSplit.amount).label("total"))
+        .join(Expense, ExpenseSplit.expense_id == Expense.id)
+        .join(Group, Expense.group_id == Group.id)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(GroupMember.user_id == user_id)
+        .filter(Expense.is_deleted == False)
+        .group_by(Group.id, Group.name)
+        .order_by(desc("total"))
+        .limit(3)
+    )
+
+    top_groups_res = await db.execute(top_groups_stmt)
+    top_groups = [
+        {"name": row[0], "amount": float(row[1])} for row in top_groups_res.all()
+    ]
+
+    # --- Calculation 4: Top-3 Months with Most Spending ---
+    # We use extract to group by year and month
+    top_months_stmt = (
+        select(
+            extract("year", Expense.created_at).label("year"),
+            extract("month", Expense.created_at).label("month"),
+            func.sum(ExpenseSplit.amount).label("total"),
+        )
+        .join(Expense, ExpenseSplit.expense_id == Expense.id)
+        .join(GroupMember, ExpenseSplit.member_id == GroupMember.id)
+        .filter(GroupMember.user_id == user_id)
+        .filter(Expense.is_deleted == False)
+        .group_by("year", "month")
+        .order_by(desc("total"))
+        .limit(3)
+    )
+
+    top_months_res = await db.execute(top_months_stmt)
+    top_months = [
+        {
+            "period": f"{datetime(int(row[0]), int(row[1]), 1).strftime('%b %Y')}",
+            "amount": float(row[2]),
+        }
+        for row in top_months_res.all()
+    ]
+
+    return {
+        "mtd_total": float(mtd_total),
+        "lifetime_total": float(lifetime_total),
+        "top_groups": top_groups,
+        "top_months": top_months,
+    }
+
 
 # 10 - Services

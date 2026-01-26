@@ -7,7 +7,13 @@ Base = declarative_base()
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=10,
+    connect_args={
+        "timeout": 10,
+        "server_settings": {"application_name": "splito-api"},
+    },
 )
 
 async_session = sessionmaker(

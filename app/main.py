@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from contextlib import asynccontextmanager
 from app.api.v1.routes.system import router as system_router
 from app.api.v1.routes.user import router as user_router
 from app.api.v1.routes.group import router as group_router
@@ -8,8 +9,15 @@ from app.api.v1.routes.expense import router as expense_router
 from app.api.v1.routes.balances import router as balance_router
 from app.api.v1.routes.settlement import router as settlement_router
 from app.api.v1.routes.webhook import router as webhook_router
+from app.core.db_check import wait_for_db
 
-app = FastAPI(title="Splitwise Backend")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await wait_for_db()
+    yield
+
+
+app = FastAPI(lifespan=lifespan, title="Splitwise Backend")
 
 origins = (
     [settings.CLIENT_URL] if settings.ENV == "production" else ["http://localhost:5173"]
@@ -27,6 +35,13 @@ app.add_middleware(
 @app.head("/")
 async def head_root():
     return {}
+
+
+@app.on_event("startup")
+async def startup():
+    from app.core.db_check import wait_for_db
+
+    await wait_for_db()
 
 
 @app.get("/")

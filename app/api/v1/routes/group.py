@@ -8,37 +8,22 @@ from app.services.group_services import (
     list_group_for_user,
     list_group_members,
     delete_group,
-    remove_member,
-    exit_group,
     edit_group,
-    get_group_settlement_plan,
-    list_group_expenses,
     get_group_by_id,
     weekly_activity,
+    group_analytics_service,
 )
 from app.schemas.group import (
     GroupCreate,
     CreateGroupResponse,
     GroupDetailOut,
-    GroupMemberOut,
-    GroupListResponse, 
+    GroupListResponse,
     GroupMemberIn,
     UpdateGroupName,
     UpdateGroupResponse,
 )
-from app.schemas.balances import GroupBalanceOut
 from app.core.dependencies import get_current_user, check_group_membership
-from app.services.settlement_service import (
-    compute_group_settlements,
-    add_settlement,
-    get_settlement_history,
-    undo_settlement,
-)
-from app.schemas.settlements import (
-    Settlement,
-    SettlementHistoryCreate,
-    SettlementHistoryOut,
-)
+
 
 router = APIRouter()
 
@@ -60,6 +45,14 @@ async def get_groups(
     db: AsyncSession = Depends(get_db), user: AuthUser = Depends(get_current_user)
 ):
     return await list_group_for_user(db, user.id)
+
+
+# working fine
+@router.get("/analytics")
+async def fetch_analytics(
+    db: AsyncSession = Depends(get_db), user: AuthUser = Depends(get_current_user)
+):
+    return await group_analytics_service(db, user.id)
 
 
 # working fine

@@ -13,3 +13,30 @@
 - in db_url :
     change sslmode to ssl 
     remove &channel_binding=true
+
+# 2. for res in _socket.getaddrinfo(host, port, family, type, proto, flags):
+        ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        socket.gaierror: [Errno 8] nodename nor servname provided, or not known
+
+     That means:
+
+    macOS DNS sometimes fails to resolve Neon’s pooler endpoint on cold start.
+
+    When that happens, SQLAlchemy crashes the process.
+
+    That’s why:
+
+        Restart → works
+
+        Cold boot → fails
+
+        Random → fails
+    
+    🔥 Why Neon pooler does this
+
+        Neon pooler uses DNS-based connection routing.
+        If DNS lookup fails once, SQLAlchemy crashes immediately.
+
+        Local dev + Neon + asyncpg = common flaky bug.
+
+    
