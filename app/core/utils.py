@@ -9,10 +9,12 @@ from collections import deque
 getcontext().prec = 28
 CENTS = Decimal("0.01")
 
+
 def qround(d: Decimal) -> Decimal:
     return d.quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
+# working fine
 def simplify_debts(net_map: Dict[int, Decimal]):
     """
     Standard Greedy algorithm to minimize number of transactions.
@@ -57,54 +59,7 @@ def simplify_debts(net_map: Dict[int, Decimal]):
     return transfers
 
 
-async def get_user_total_balance(db: AsyncSession, user_id: int):
-    paid_q = select(func.coalesce(func.sum(Expense.amount), 0)).where(
-        Expense.paid_by == user_id
-    )
-    paid_res = await db.execute(paid_q)
-    paid = Decimal(str(paid_res.scalar() or 0))
-
-    owed_q = (
-        select(func.coalesce(func.sum(ExpenseSplit.amount), 0))
-        .where(ExpenseSplit.user_id == user_id)
-        .join(Expense, Expense.id == ExpenseSplit.expense_id)
-    )
-
-    owed_res = await db.execute(owed_q)
-    owed = Decimal(str(owed_res.scalar() or 0))
-
-    return qround(paid - owed)
-
-
-async def get_overall_net_map(db: AsyncSession) -> Dict[int, Decimal]:
-    paid_q = (
-        select(Expense.paid_by, func.coalesce(func.sum(Expense.amount), 0))
-        .where(Expense.is_deleted == False)
-        .group_by(Expense.paid_by)
-    )
-    paid_res = await db.execute(paid_q)
-    paid_map = {uid: qround(Decimal(str(amt))) for uid, amt in paid_res.all()}
-
-    owed_q = (
-        select(ExpenseSplit.user_id, func.coalesce(func.sum(ExpenseSplit.amount), 0))
-        .join(Expense, Expense.id == ExpenseSplit.expense_id)
-        .where(Expense.is_deleted == False)
-        .group_by(ExpenseSplit.user_id)
-    )
-    owed_res = await db.execute(owed_q)
-    owed_map = {uid: qround(Decimal(str(amt))) for uid, amt in owed_res.all()}
-
-    user_ids = set(paid_map) | set(owed_map)
-
-    net = {}
-    for uid in user_ids:
-        net[uid] = qround(
-            paid_map.get(uid, Decimal("0")) - owed_map.get(uid, Decimal("0"))
-        )
-
-    return net
-
-
+# working fine
 async def get_group_net_balances(
     db: AsyncSession,
     group_id: int,
@@ -157,6 +112,7 @@ async def get_group_net_balances(
     return net
 
 
+# working fine
 async def is_group_settled(
     db: AsyncSession,
     group_id: int,

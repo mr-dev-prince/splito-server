@@ -1,9 +1,11 @@
 from pydantic import BaseModel, EmailStr
 from datetime import datetime
 
+
 class UserBase(BaseModel):
-    email:EmailStr
-    name:str
+    email: EmailStr
+    name: str
+
 
 class AuthUser(BaseModel):
     id: int
@@ -12,4 +14,8 @@ class AuthUser(BaseModel):
     is_active: bool = True
 
     class Config:
-        frozen = True 
+        frozen = True
+
+
+class SetPinRequest(BaseModel):
+    pin: str

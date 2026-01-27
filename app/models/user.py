@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
 from app.db.session import Base
 
+
 class User(Base):
     __tablename__ = "users"
 
@@ -14,10 +15,11 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
+    security_pin = Column(String, nullable=True)
+    security_pin_active = Column(Boolean, default=False)
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now()
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
     last_login_at = Column(DateTime(timezone=True), nullable=True)

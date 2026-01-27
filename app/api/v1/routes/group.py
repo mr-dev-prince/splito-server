@@ -22,7 +22,7 @@ from app.schemas.group import (
     UpdateGroupName,
     UpdateGroupResponse,
 )
-from app.core.dependencies import get_current_user, check_group_membership
+from app.core.dependencies import get_current_user
 
 
 router = APIRouter()
@@ -83,9 +83,9 @@ async def edit(
 async def del_group(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_current_user),
 ):
-    return await delete_group(db, group_id=group_id, creator_id=current_user.id)
+    return await delete_group(db, group_id, user.id)
 
 
 # working fine
@@ -109,72 +109,11 @@ async def get_weekly_activity(
     return await weekly_activity(db, group_id, current_user.id)
 
 
-# @router.delete("/{group_id}/remove/{user_id}")
-# async def rem_mem(group_id: int, user_id : int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-#     await check_group_membership(db, group_id, current_user.id)
-#     return await remove_member(db, group_id=group_id, user_id=user_id, creator_id = current_user.id)
-
-# @router.delete("/{group_id}/exit")
-# async def exit(group_id: int, db:AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-#     await check_group_membership(db, group_id, current_user.id)
-#     return await exit_group(db, group_id=group_id, user_id=current_user.id)
-
-
 # working fine
 @router.get("/{group_id}/members")
 async def group_members(
     group_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
+    current_user: AuthUser = Depends(get_current_user),
 ):
-    await check_group_membership(db, group_id, current_user.id)
-    return await list_group_members(db, current_user.id, group_id=group_id)
-
-
-# @router.get("/{group_id}/balances", response_model=GroupBalanceOut)
-# async def group_balances(group_id: int, db: AsyncSession = Depends(get_db), current_user = Depends(get_current_user)):
-#     await check_group_membership(db, group_id, current_user.id)
-#     plan = await get_group_settlement_plan(db, group_id=group_id)
-#     return plan
-
-# @router.get("/{group_id}/settlements", response_model=list[Settlement])
-# async def get_group_settlements(
-#     group_id: int,
-#     db: AsyncSession = Depends(get_db),
-#     user = Depends(get_current_user)
-# ):
-#     return await compute_group_settlements(db, group_id, user.id)
-
-# @router.post("/{group_id}/settlements/add", response_model=SettlementHistoryOut)
-# async def add_manual_settlement(
-#     data: SettlementHistoryCreate,
-#     db: AsyncSession = Depends(get_db),
-#     user = Depends(get_current_user)
-# ):
-#     return await add_settlement(db, user.id, data)
-
-# @router.delete("/{group_id}/settlements/undo/{settlement_id}")
-# async def undo_settlement_route(
-#     settlement_id: int,
-#     db: AsyncSession = Depends(get_db),
-#     user = Depends(get_current_user)
-# ):
-#     return await undo_settlement(db, settlement_id, user.id)
-
-# @router.get("/{group_id}/settlement-history", response_model=list[SettlementHistoryOut])
-# async def fetch_history(
-#     group_id: int,
-#     db: AsyncSession = Depends(get_db),
-#     user = Depends(get_current_user)
-# ):
-#     return await get_settlement_history(db, group_id, user.id)
-
-# @router.get("/{group_id}/expenses", description="get all expenses of the group")
-# async def fetch_expenses(
-#     group_id: int,
-#     db: AsyncSession = Depends(get_db),
-#     user = Depends(get_current_user)
-# ):
-#     return await list_group_expenses(db, user.id, group_id)
-
-# 13 - Group APIs
+    return await list_group_members(db, current_user.id, group_id)

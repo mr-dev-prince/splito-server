@@ -12,6 +12,7 @@ _jwks_last_fetch = 0
 JWKS_TTL = 60 * 60  # Time to live : 1 hour
 
 
+# working fine
 async def get_jwks():
     """
     Safe JWKS fetcher with:
@@ -45,6 +46,7 @@ async def get_jwks():
         )
 
 
+# working fine
 def get_bearer_token(request: Request) -> str:
     auth = request.headers.get("Authorization")
     if not auth or not auth.startswith("Bearer "):
@@ -52,6 +54,7 @@ def get_bearer_token(request: Request) -> str:
     return auth.split(" ")[1]
 
 
+# working fine
 async def verify_clerk_token(request: Request):
     token = get_bearer_token(request)
     try:

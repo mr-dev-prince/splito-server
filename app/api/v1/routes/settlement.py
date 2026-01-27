@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from app.schemas.user import AuthUser
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.session import get_db
-from app.core.dependencies import get_current_user, check_group_membership
+from app.core.dependencies import get_current_user
 from app.services.settlement_service import admin_group_settlements
 
 router = APIRouter()

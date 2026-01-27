@@ -1,14 +1,17 @@
 from datetime import datetime
 from pydantic import BaseModel, model_validator
 
+
 class GroupCreate(BaseModel):
     name: str
+
 
 class CreateGroupResponse(BaseModel):
     id: int
 
     class Config:
         from_attributes = True
+
 
 class GroupListResponse(BaseModel):
     id: int
@@ -21,7 +24,8 @@ class GroupListResponse(BaseModel):
 
     class Config:
         from_attributes = True
-    
+
+
 class GroupDetailOut(BaseModel):
     id: int
     name: str
@@ -34,9 +38,10 @@ class GroupDetailOut(BaseModel):
 
     class Config:
         from_attributes = True
-        
+
+
 class GroupMemberOut(BaseModel):
-    name:str
+    name: str
     email: str | None = None
     phone: str | None = None
     user_id: int | None = None
@@ -44,6 +49,7 @@ class GroupMemberOut(BaseModel):
 
     class Config:
         from_attributes = True
+
 
 class GroupMemberIn(BaseModel):
     email: str | None = None
@@ -58,8 +64,10 @@ class GroupMemberIn(BaseModel):
             raise ValueError("Email or phone is required")
         return self
 
+
 class UpdateGroupName(BaseModel):
     name: str | None = None
+
 
 class UpdateGroupResponse(BaseModel):
     message: str

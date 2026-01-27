@@ -9,12 +9,13 @@ from app.models.group import Group
 from app.models.group_member import GroupMember
 
 
+# working fine
 async def get_current_user(
     request: Request, db: AsyncSession = Depends(get_db)
 ) -> AuthUser:
     payload = await verify_clerk_token(request)
     clerk_user_id = payload["sub"]
-    
+
     result = await db.execute(select(User).where(User.clerk_user_id == clerk_user_id))
 
     user = result.scalar_one_or_none()
@@ -30,27 +31,7 @@ async def get_current_user(
     )
 
 
-async def check_group_membership(db: AsyncSession, group_id: int, user_id: int):
-    q_group = select(Group).where(Group.id == group_id)
-    res_group = await db.execute(q_group)
-    group = res_group.scalar_one_or_none()
-
-    if not group:
-        raise HTTPException(404, "Group does not exist")
-
-    q_member = select(GroupMember).where(
-        GroupMember.group_id == group_id, GroupMember.user_id == user_id
-    )
-
-    res_member = await db.execute(q_member)
-    member = res_member.scalar_one_or_none()
-
-    if not member:
-        raise HTTPException(403, "You are not a member of this group")
-
-    return member
-
-
+# working fine
 async def ensure_active_group_member(
     db: AsyncSession,
     user_id: int,
@@ -87,6 +68,7 @@ async def ensure_active_group_member(
         )
 
 
+# working fine
 async def fetch_member_id(db: AsyncSession, user_id: int, group_id: int):
     q = select(GroupMember.id).where(
         GroupMember.user_id == user_id, GroupMember.group_id == group_id

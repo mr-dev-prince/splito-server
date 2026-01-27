@@ -45,3 +45,5 @@ htmlcov/
 Thumbs.db
 
 *.ini
+
+deprecated
