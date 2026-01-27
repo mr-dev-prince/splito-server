@@ -4,9 +4,13 @@ Splito is a high-performance, minimalist expense-sharing API designed to handle 
 
 # 🚀 Live Links
 
-### Production API Documentation: splito-server.onrender.com/docs
+### Production API Documentation:
 
-### Production Frontend: splito-client.vercel.app
+- https://splito-server.onrender.com/docs
+
+### Production Frontend:
+
+- https://splito-client.vercel.app
 
 # 🛠 Tech Stack
 
