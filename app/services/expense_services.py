@@ -8,7 +8,7 @@ from app.models.group_member import GroupMember
 from app.schemas.expense import ExpenseCreate
 from app.models.user import User
 from app.core.utils import qround
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from fastapi import HTTPException
 
 
@@ -16,63 +16,73 @@ from fastapi import HTTPException
 async def create_expense(
     db: AsyncSession, data: ExpenseCreate, paid_by: int, group_id: int
 ):
+    # 1. Verify group membership for the payer
     await ensure_active_group_member(db, paid_by, group_id)
 
-    payer_member_id = select(GroupMember.id).where(
+    payer_member_id_query = select(GroupMember.id).where(
         GroupMember.group_id == group_id, GroupMember.user_id == paid_by
     )
-
-    res = await db.execute(payer_member_id)
-
+    res = await db.execute(payer_member_id_query)
     payer_member_id = res.scalar_one_or_none()
 
     if not payer_member_id:
         raise HTTPException(400, detail="Payer is not a member of the group")
 
-    # -----------------------------------
-    # 2. Extract & validate split users
-    # -----------------------------------
+    # 2. Extract & validate unique split users
     member_ids = [s.member_id for s in data.splits]
-
     if len(member_ids) != len(set(member_ids)):
         raise HTTPException(400, detail="Duplicate users found in splits")
 
     # -----------------------------------
-    # 3. Validate amounts
+    # 3. Validate & Reconcile amounts
     # -----------------------------------
-    if any(Decimal(s.amount) <= 0 for s in data.splits):
+    TWOPLACES = Decimal('0.01')
+    
+    # Standardize the total expense amount
+    expense_amount = Decimal(str(data.amount)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
+    
+    # Quantize all split amounts and keep them in a list
+    split_amounts = [
+        Decimal(str(s.amount)).quantize(TWOPLACES, rounding=ROUND_HALF_UP) 
+        for s in data.splits
+    ]
+
+    if any(amt <= 0 for amt in split_amounts):
         raise HTTPException(400, detail="Split amounts must be positive")
 
-    total_split = sum(Decimal(s.amount) for s in data.splits)
-    if total_split != Decimal(data.amount):
-        raise HTTPException(
-            400,
-            f"Split total ({total_split}) must equal expense amount ({data.amount})",
-        )
+    # Calculate the "Penny Gap"
+    total_split_sum = sum(split_amounts)
+    difference = expense_amount - total_split_sum
 
-    # -----------------------------------
+    # If there's a minor rounding difference (e.g., 0.01 or 0.02), 
+    # adjust the first person's split to balance the books.
+    if difference != 0:
+        # We allow a small threshold for auto-adjustment (e.g., 10 cents)
+        # to prevent massive data entry errors from being "auto-fixed"
+        if abs(difference) > Decimal('0.10'):
+            raise HTTPException(
+                400, 
+                detail=f"Split total {total_split_sum} differs too much from {expense_amount}"
+            )
+        split_amounts[0] += difference
+
     # 4. Validate ALL split users are group members
-    # -----------------------------------
     members_q = select(GroupMember.id).where(
         GroupMember.group_id == group_id, GroupMember.id.in_(member_ids)
     )
-
     members_res = await db.execute(members_q)
+    valid_member_ids = {row[0] for row in members_res.all()}
 
-    valid_user_ids = {row[0] for row in members_res.all()}
-
-    if set(member_ids) != valid_user_ids:
+    if set(member_ids) != valid_member_ids:
         raise HTTPException(
             400, "One or more users in splits are not members of the group"
         )
 
-    # -----------------------------------
-    # 5. Create expense
-    # -----------------------------------
+    # 5. Create expense record
     expense = Expense(
         group_id=group_id,
         paid_by=payer_member_id,
-        amount=data.amount,
+        amount=expense_amount, # Use the quantized decimal
         title=data.title,
         strategy=data.strategy,
     )
@@ -81,11 +91,15 @@ async def create_expense(
     await db.flush()  # generates expense.id
 
     # -----------------------------------
-    # 6. Create splits
+    # 6. Create splits using adjusted amounts
     # -----------------------------------
     splits = [
-        ExpenseSplit(expense_id=expense.id, member_id=s.member_id, amount=s.amount)
-        for s in data.splits
+        ExpenseSplit(
+            expense_id=expense.id, 
+            member_id=data.splits[i].member_id, 
+            amount=split_amounts[i] # Use the reconciled amount
+        )
+        for i in range(len(data.splits))
     ]
 
     db.add_all(splits)
@@ -94,7 +108,6 @@ async def create_expense(
     await db.refresh(expense)
 
     return expense
-
 
 # working fine
 async def delete_expense(db: AsyncSession, user_id: int, expense_id: int):
