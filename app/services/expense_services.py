@@ -6,6 +6,7 @@ from app.models.expense import Expense
 from app.models.expense_split import ExpenseSplit
 from app.models.group_member import GroupMember
 from app.schemas.expense import ExpenseCreate
+from app.core.utils import publish_event
 from app.models.user import User
 from app.core.utils import qround
 from decimal import Decimal, ROUND_HALF_UP
@@ -36,14 +37,16 @@ async def create_expense(
     # -----------------------------------
     # 3. Validate & Reconcile amounts
     # -----------------------------------
-    TWOPLACES = Decimal('0.01')
-    
+    TWOPLACES = Decimal("0.01")
+
     # Standardize the total expense amount
-    expense_amount = Decimal(str(data.amount)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
-    
+    expense_amount = Decimal(str(data.amount)).quantize(
+        TWOPLACES, rounding=ROUND_HALF_UP
+    )
+
     # Quantize all split amounts and keep them in a list
     split_amounts = [
-        Decimal(str(s.amount)).quantize(TWOPLACES, rounding=ROUND_HALF_UP) 
+        Decimal(str(s.amount)).quantize(TWOPLACES, rounding=ROUND_HALF_UP)
         for s in data.splits
     ]
 
@@ -54,15 +57,15 @@ async def create_expense(
     total_split_sum = sum(split_amounts)
     difference = expense_amount - total_split_sum
 
-    # If there's a minor rounding difference (e.g., 0.01 or 0.02), 
+    # If there's a minor rounding difference (e.g., 0.01 or 0.02),
     # adjust the first person's split to balance the books.
     if difference != 0:
         # We allow a small threshold for auto-adjustment (e.g., 10 cents)
         # to prevent massive data entry errors from being "auto-fixed"
-        if abs(difference) > Decimal('0.10'):
+        if abs(difference) > Decimal("0.10"):
             raise HTTPException(
-                400, 
-                detail=f"Split total {total_split_sum} differs too much from {expense_amount}"
+                400,
+                detail=f"Split total {total_split_sum} differs too much from {expense_amount}",
             )
         split_amounts[0] += difference
 
@@ -82,7 +85,7 @@ async def create_expense(
     expense = Expense(
         group_id=group_id,
         paid_by=payer_member_id,
-        amount=expense_amount, # Use the quantized decimal
+        amount=expense_amount,  # Use the quantized decimal
         title=data.title,
         strategy=data.strategy,
     )
@@ -95,9 +98,9 @@ async def create_expense(
     # -----------------------------------
     splits = [
         ExpenseSplit(
-            expense_id=expense.id, 
-            member_id=data.splits[i].member_id, 
-            amount=split_amounts[i] # Use the reconciled amount
+            expense_id=expense.id,
+            member_id=data.splits[i].member_id,
+            amount=split_amounts[i],  # Use the reconciled amount
         )
         for i in range(len(data.splits))
     ]
@@ -107,7 +110,22 @@ async def create_expense(
     await db.commit()
     await db.refresh(expense)
 
+    # fire notification events
+    try:
+        publish_event(
+            event_type="EXPENSE_ADDED",
+            data={
+                "expense_id": expense.id,
+                "group_id": group_id,
+                "amount": float(expense_amount),
+                "user_email": "princechaurasiaofficial24@gmail.com",
+            },
+        )
+    except Exception as e:
+        print(f"Failed to publish event: {e}")
+
     return expense
+
 
 # working fine
 async def delete_expense(db: AsyncSession, user_id: int, expense_id: int):

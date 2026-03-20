@@ -3,8 +3,11 @@ from typing import Dict, List, Tuple
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.expense import Expense
+from app.core.config import settings
 from app.models.expense_split import ExpenseSplit
 from collections import deque
+import pika
+import json
 
 getcontext().prec = 28
 CENTS = Decimal("0.01")
@@ -131,3 +134,25 @@ async def is_group_settled(
             return False
 
     return True
+
+
+# email publisher
+def publish_event(event_type, data):
+    print(
+        f"Publishing event: {event_type} with data: {data} | RABBITMQ_URL: {settings.RABBITMQ_URL}"
+    )
+    connection = pika.BlockingConnection(pika.URLParameters(settings.RABBITMQ_URL))
+    channel = connection.channel()
+
+    channel.queue_declare(queue="notifications", durable=True)
+
+    message = {"event": event_type, "data": data}
+
+    channel.basic_publish(
+        exchange="",
+        routing_key="notifications",
+        body=json.dumps(message),
+        properties=pika.BasicProperties(delivery_mode=2),
+    )
+
+    connection.close()
